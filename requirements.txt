@@ -1,5 +1,10 @@
-# Core dependencies (stdlib only - no external deps for local mode)
-# The tool runs fully offline using regex-based heuristics.
+# Drift Auditor — Dependencies
+# Core engine (drift_auditor.py) runs with stdlib only.
+# The dashboard UI (app.py) requires the packages below.
+
+streamlit>=1.41.0
+plotly>=5.24.0
+pandas>=2.2.0
 
 # Optional: API-powered semantic omission detection (Layer 2)
 # Uncomment to enable detect_omission_api() with Anthropic's API

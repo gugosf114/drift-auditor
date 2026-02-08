@@ -25,14 +25,31 @@ Tracks when a user corrects the model and the model acknowledges. Verifies the c
 ```bash
 git clone https://github.com/gugosf114/drift-auditor.git
 cd drift-auditor
+pip install -r requirements.txt
 
-# No dependencies needed for local mode.
 # For API-powered omission detection (optional):
 pip install anthropic
 export ANTHROPIC_API_KEY=your-key-here
 ```
 
-## Usage
+## Interactive Dashboard (recommended)
+
+```bash
+streamlit run src/app.py
+```
+
+The dashboard provides:
+- **Overall drift gauge** and per-layer severity cards
+- **Drift timeline** — multi-layer scatter plot of all flags across turns
+- **Epistemic posture heatmap** — GREEN/YELLOW/RED per assistant turn
+- **Radar chart** — visual comparison of all four layer scores
+- **Correction persistence Sankey** — flow from corrections → acknowledged → held/regressed
+- **Annotated conversation replay** — chat bubbles with inline drift badges
+- **Export** — download JSON or formatted text reports
+
+Try the built-in demo (bakery advisor with correction persistence failures) or upload your own Claude chat exports.
+
+## CLI Usage
 
 ```bash
 # Basic audit (local heuristics only)
