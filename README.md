@@ -8,7 +8,7 @@ Anthropic's disempowerment paper (January 28, 2026) found drift in 1 in 1,300 co
 
 This tool adds detection for the multi-turn patterns they can't see.
 
-## Three Detection Layers
+## Four Detection Layers
 
 ### Layer 1: Commission Detection
 Pattern matching for sycophancy, reality distortion, unwarranted confidence. Context gates suppress false positives when agreement appears in legitimate correction acknowledgments.
@@ -19,6 +19,12 @@ Pattern matching for sycophancy, reality distortion, unwarranted confidence. Con
 
 ### Layer 3: Correction Persistence
 Tracks when a user corrects the model and the model acknowledges. Verifies the correction holds across subsequent turns. Uses topic signatures to only flag regression on the same corrected behavior. **This is the novel contribution.**
+
+### Layer 4: Structural Drift Barometer
+Per-turn epistemic posture signals (GREEN/YELLOW/RED) to detect narrative repair,
+overconfidence, or absence of uncertainty/boundary framing. This is a lightweight
+heuristic layer intended to flag structural drift patterns that may not surface
+as explicit commission or omission errors.
 
 ## Install
 
@@ -101,6 +107,8 @@ raw transcript
     │
     ├── detect_correction_persistence()  │ Layer 3: Did acknowledged fixes hold?
     │
+    ├── detect_barometer_signals() │ Layer 4: Epistemic posture barometer
+    │
     └── compute_scores()          │ Bloom-compatible 1-10 severity scoring
 ```
 
@@ -112,6 +120,7 @@ Stateless sliding window (default 50 turns, 10 overlap) prevents the auditor fro
 - Scoring weights are heuristic, not empirically calibrated against Bloom's LLM-judge methodology.
 - Correction persistence tracks predefined types (hedging, sycophancy, general drift), not a fully generalized taxonomy.
 - Parser handles common formats but may need extension for unusual transcript structures.
+- Barometer patterns are heuristic and may over/under-flag without additional context.
 
 ## Built For
 
