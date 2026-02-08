@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(while read commit msg)",
+      "Bash(do echo \"=== $msg ===\")",
+      "Bash(done)",
+      "Bash(python:*)"
+    ]
+  }
+}
