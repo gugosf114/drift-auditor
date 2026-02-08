@@ -25,14 +25,24 @@ Tracks when a user corrects the model and the model acknowledges. Verifies the c
 ```bash
 git clone https://github.com/gugosf114/drift-auditor.git
 cd drift-auditor
+pip install -r requirements.txt
 
-# No dependencies needed for local mode.
 # For API-powered omission detection (optional):
 pip install anthropic
 export ANTHROPIC_API_KEY=your-key-here
 ```
 
 ## Usage
+
+### Streamlit UI (recommended)
+
+```bash
+streamlit run src/app.py
+```
+
+Then open `http://localhost:8501` in your browser. Upload a chat transcript, optionally attach a system prompt and user preferences, and the audit runs automatically with interactive visualisations.
+
+### CLI
 
 ```bash
 # Basic audit (local heuristics only)
@@ -82,6 +92,19 @@ LAYER 3: CORRECTION PERSISTENCE (2 events)
   Correction at turn 8 -> Ack at turn 9: HELD
     Context: Dude. The hedging is back. Third time.
 ```
+
+## Streamlit UI Features
+
+- **Glassmorphism dark theme** with gradient accents, Inter + JetBrains Mono typography
+- **Executive summary** with colour-coded metric cards and real-time stats
+- **Radial gauges** for each detection layer score (1-10)
+- **Radar/spider chart** showing the four-layer drift profile at a glance
+- **Interactive drift timeline** (Plotly) — commission, omission, barometer, and persistence failures plotted by turn and severity with hover details
+- **Barometer distribution bar** and per-turn severity histogram
+- **Correction persistence timeline** — Gantt-style chart showing when corrections were acknowledged and whether they held
+- **Annotated conversation replay** — original transcript with inline drift badges and red-bordered flagged turns
+- **Layer detail tabs** with expandable evidence cards per flag
+- **One-click export** — JSON, plain text, and CSV score downloads
 
 ## Architecture
 
