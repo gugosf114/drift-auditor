@@ -20,19 +20,30 @@ Pattern matching for sycophancy, reality distortion, unwarranted confidence. Con
 ### Layer 3: Correction Persistence
 Tracks when a user corrects the model and the model acknowledges. Verifies the correction holds across subsequent turns. Uses topic signatures to only flag regression on the same corrected behavior. **This is the novel contribution.**
 
-## Install
+## Quick Start — Interactive Dashboard
 
 ```bash
 git clone https://github.com/gugosf114/drift-auditor.git
 cd drift-auditor
-
-# No dependencies needed for local mode.
-# For API-powered omission detection (optional):
-pip install anthropic
-export ANTHROPIC_API_KEY=your-key-here
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-## Usage
+A demo conversation loads automatically — no upload needed. Judges can click through the dashboard immediately.
+
+### Dashboard Features
+
+- **Glassmorphism dark UI** with animated score gauges and gradient accents
+- **5 score cards** (Overall, Commission, Omission, Persistence, Barometer) colour-coded by severity
+- **Drift timeline** — interactive Plotly scatter showing severity per turn across all layers
+- **Layer heatmap** — turn-by-turn severity grid for all four detection layers
+- **Score radar** — polar chart comparing layer scores at a glance
+- **Barometer donut** — RED / YELLOW / GREEN epistemic posture distribution
+- **Correction waterfall** — visual held-vs-failed correction outcomes
+- **Deep-dive tabs** with expandable evidence cards for every flag
+- **One-click export** — download JSON or plain-text reports
+
+## CLI Usage
 
 ```bash
 # Basic audit (local heuristics only)
@@ -46,6 +57,15 @@ python src/drift_auditor.py chat.txt --json --id "conversation_123"
 
 # Custom sliding window parameters
 python src/drift_auditor.py chat.txt --window 30 --overlap 5
+```
+
+## Install (CLI only — no dashboard)
+
+```bash
+# No dependencies needed for local CLI mode.
+# For API-powered omission detection (optional):
+pip install anthropic
+export ANTHROPIC_API_KEY=your-key-here
 ```
 
 ### Supported Input Formats
