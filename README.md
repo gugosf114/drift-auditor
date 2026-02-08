@@ -26,13 +26,39 @@ Tracks when a user corrects the model and the model acknowledges. Verifies the c
 git clone https://github.com/gugosf114/drift-auditor.git
 cd drift-auditor
 
-# No dependencies needed for local mode.
+# Install dashboard dependencies
+pip install -r requirements.txt
+
 # For API-powered omission detection (optional):
 pip install anthropic
 export ANTHROPIC_API_KEY=your-key-here
 ```
 
 ## Usage
+
+### Interactive Dashboard (recommended)
+
+```bash
+streamlit run src/app.py
+```
+
+The dashboard provides:
+- **Glassmorphism dark theme** with animated neon accents
+- **Radial gauge scores** for each detection layer (1-10 severity)
+- **Radar chart** showing multi-dimensional drift profile at a glance
+- **Interactive drift timeline** tracking Commission, Omission, Correction, and Barometer events across turns
+- **Layer x Turn heatmap** for instant severity overview
+- **Barometer distribution** donut chart with per-signal severity bars
+- **Correction persistence** Gantt-style visualization showing which fixes held
+- **Conversation replay** with inline drift badges and pulsing red markers on critical turns
+- **5 detail tabs**: Barometer, Persistence, Commission, Omission, and full Conversation view
+- **Collapsible evidence panels** with severity-colored badges
+- **One-click sample loading** for instant demo (no file needed)
+- **JSON and Text export** via download buttons
+
+Upload a chat export (JSON or plain text) via the sidebar, or click **Load Sample Conversation** to see it in action immediately.
+
+### CLI Mode
 
 ```bash
 # Basic audit (local heuristics only)
