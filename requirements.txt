@@ -1,0 +1,6 @@
+# Core dependencies (stdlib only - no external deps for local mode)
+# The tool runs fully offline using regex-based heuristics.
+
+# Optional: API-powered semantic omission detection (Layer 2)
+# Uncomment to enable detect_omission_api() with Anthropic's API
+# anthropic>=0.40.0
