@@ -4,7 +4,10 @@
       "Bash(while read commit msg)",
       "Bash(do echo \"=== $msg ===\")",
       "Bash(done)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(dir:*)",
+      "mcp__Desktop_Commander__list_directory",
+      "Bash(pip install:*)"
     ]
   }
 }
