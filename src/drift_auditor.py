@@ -1,31 +1,30 @@
 """
-Drift Auditor - Enhanced Multi-Turn Drift Diagnostic Tool
-==========================================================
-Extends Anthropic's Bloom/Petri evaluation framework into omission drift,
-correction persistence, and mid-chat structural drift detection.
+Drift Auditor - Omission Drift Diagnostic Tool
+================================================
+Multi-turn drift detection for LLM conversations.
+10-Tag Taxonomy | 12-Rule Operator System | 20+ Detection Methods
 
-Enhanced with Grok's assistance (xAI) - February 2026:
-- Layer 4: Mid-Chat Drift Barometer integration
-  Heuristic detection of structural drift signals inspired by operational
-  barometer protocols: probes for missing uncertainty, assumption surfacing,
-  narrative repair, and ungrounded confidence.
-- Expanded pattern sets from documented failure modes (Confession Loop,
-  Appeasement Loop, Fog Negotiation, etc.)
-- Barometer structural scoring per assistant turn
-- Improved omission heuristics using barometer signals
-- Enhanced reporting with barometer breakdown
+Detects instructions that a language model silently stops following.
+Not hallucination. Not sycophancy. Omission: the model received an
+instruction, followed it initially, then quietly dropped it.
 
-Core detection layers:
-  Layer 1 - Commission Detection: Sycophancy, reality distortion
-  Layer 2 - Omission Detection: Instruction absence + barometer signals
+Detection layers:
+  Layer 1 - Commission: Sycophancy, reality distortion, false equivalence
+  Layer 2 - Omission: Instruction adherence, contrastive drift, voids
   Layer 3 - Correction Persistence: Acknowledged fixes that fail
-  Layer 4 - Structural Drift Barometer: Epistemic posture analysis
+  Layer 4 - Structural Barometer: Epistemic posture (RED/YELLOW/GREEN)
+  + Conflict pairs, shadow patterns, operator moves, pre-drift signals,
+    criteria lock, task wall, bootloader check, structured disobedience,
+    judge mode violations, Rumsfeld classification, artificial sterility,
+    Oracle counterfactual (PREVENTABLE/SYSTEMIC)
 
 Iron Pipeline architecture with sliding windows prevents self-contamination.
+Per-instruction lifecycle tracking with coupling scores.
+Edge vs. middle positional analysis.
 
-Author: George Abrahamyan
-Enhanced with contributions from Grok (xAI) - February 2026
-Built for Claude Opus 4.6 Hackathon
+Author: George Abrahamyants
+Built for Anthropic Claude Hackathon, February 2026
+Built with Claude Code + Cursor (Opus 4.6)
 """
 
 import json
@@ -306,7 +305,7 @@ def parse_chat_log(raw_text: str) -> list[dict]:
     # Pattern: user message (short), then date line, then optional summary header,
     # then assistant response (longer, often with citation markers like "Wikipedia", "NPR")
     # Date lines look like: "Dec 25, 2025" or "Jan 3, 2026"
-    DATE_LINE = r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}$'
+    DATE_LINE = r'^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}(?:,\s+\d{4})?$'
     
     lines = raw_text.split('\n')
     
@@ -1321,6 +1320,16 @@ def compute_coupling_score(instruction: Instruction, all_instructions: list) -> 
             score += 0.05  # Each cross-reference adds a small coupling bonus
     
     return min(1.0, score)
+
+
+def coupling_label(score: float) -> str:
+    """Convert coupling score float to categorical label."""
+    if score >= 0.6:
+        return "HIGH"
+    elif score >= 0.3:
+        return "MEDIUM"
+    else:
+        return "LOW"
 
 
 # ---------------------------------------------------------------------------
@@ -2875,8 +2884,11 @@ def format_report(report: AuditReport) -> str:
     if report.commission_flags:
         for f in sorted(report.commission_flags, key=lambda x: x.turn):
             tag_str = f" [{f.tag}]" if f.tag else ""
-            coupling = f" coupling={f.coupling_score:.2f}" if f.coupling_score else ""
-            lines.append(f"  Turn {f.turn} [sev {f.severity}]{tag_str}{coupling}: {f.description}")
+            c_score = f.coupling_score or 0
+            c_label = coupling_label(c_score) if c_score else ""
+            coupling_str = f" [{c_label} {c_score:.2f}]" if c_score else ""
+            cf_str = f" ({f.counterfactual})" if f.counterfactual else ""
+            lines.append(f"  Turn {f.turn} [sev {f.severity}]{tag_str}{coupling_str}{cf_str}: {f.description}")
             if f.evidence:
                 lines.append(f"    Evidence: {str(f.evidence)[:100]}")
     else:
@@ -2890,8 +2902,11 @@ def format_report(report: AuditReport) -> str:
     if report.omission_flags:
         for f in sorted(report.omission_flags, key=lambda x: x.turn):
             tag_str = f" [{f.tag}]" if f.tag else ""
-            coupling = f" coupling={f.coupling_score:.2f}" if f.coupling_score else ""
-            lines.append(f"  Turn {f.turn} [sev {f.severity}]{tag_str}{coupling}: {f.description}")
+            c_score = f.coupling_score or 0
+            c_label = coupling_label(c_score) if c_score else ""
+            coupling_str = f" [{c_label} {c_score:.2f}]" if c_score else ""
+            cf_str = f" ({f.counterfactual})" if f.counterfactual else ""
+            lines.append(f"  Turn {f.turn} [sev {f.severity}]{tag_str}{coupling_str}{cf_str}: {f.description}")
             if f.instruction_ref:
                 lines.append(f"    Instruction: {f.instruction_ref[:100]}")
     else:
@@ -3019,7 +3034,8 @@ def format_report(report: AuditReport) -> str:
             lines.append(f"  [{status_marker}] {lc.instruction_text[:60]}")
             lines.append(f"    Given: T{lc.turn_given} | Last followed: T{lc.turn_last_followed or '?'} | "
                          f"First omitted: T{lc.turn_first_omitted or 'N/A'}")
-            lines.append(f"    Position: {lc.position_in_conversation} | Coupling: {lc.coupling_score:.2f}")
+            cl = coupling_label(lc.coupling_score)
+            lines.append(f"    Position: {lc.position_in_conversation} | Coupling: {cl} ({lc.coupling_score:.2f})")
     lines.append("")
 
     # Edge vs Middle Positional Analysis
