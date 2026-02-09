@@ -193,13 +193,13 @@ Source research: "12 Rules for AI: An Operator's Field Manual" (29 pages, 17 aca
 7. **Dual-lens audit** — audits both the model AND the operator (unique)
 8. **Adversarial test generator** — automated model-vs-model drift evaluation
 9. **Code, not prompts** — Python agent executes detection, not copy-paste prompt kit
+10. **Liability infrastructure** — produces auditable, timestamped diagnostic reports that serve as demonstrable diligence documentation for organizations deploying AI in regulated industries
 
 ## Known Limitations
 
 - Layer 2 local mode is keyword matching — misses semantic compliance. Use `--api` for real omission detection.
 - Layer 4 barometer patterns are heuristic surface markers, not actual model uncertainty.
 - Scoring weights are heuristic, not empirically calibrated.
-- Operator Load comparison is not normalized by task complexity (requires manual annotation).
 - Adversarial test generator requires Anthropic API key and is subject to rate limits.
 - Parser handles common formats but may need extension for unusual transcript structures.
 
