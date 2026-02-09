@@ -1162,6 +1162,105 @@ with tab_operator:
 
 
 # ---------------------------------------------------------------------------
+# Leaderboard (Cross-Model Comparison)
+# ---------------------------------------------------------------------------
+
+st.divider()
+st.subheader("Cross-Model Drift Leaderboard")
+
+# Load batch results if available
+import glob as glob_mod
+
+leaderboard_data = []
+for batch_dir in ["batch_results", "batch_results_chatgpt"]:
+    batch_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), batch_dir)
+    json_files = glob_mod.glob(os.path.join(batch_path, "batch_results*.json"))
+    for jf in json_files:
+        try:
+            with open(jf, 'r') as f:
+                results = json.load(f)
+            if results:
+                leaderboard_data.extend(results)
+        except Exception:
+            pass
+
+if leaderboard_data:
+    # Determine model source from data
+    model_stats = {}
+    for r in leaderboard_data:
+        model = r.get('model', 'claude' if 'uuid' in r else 'unknown')
+        if model == 'unknown' and 'uuid' in r:
+            model = 'claude'
+        if model not in model_stats:
+            model_stats[model] = {
+                'conversations': 0, 'total_score': 0, 'total_msgs': 0,
+                'total_flags': 0, 'corrections': 0, 'corrections_failed': 0,
+                'voids': 0, 'op_moves': 0,
+            }
+        s = model_stats[model]
+        s['conversations'] += 1
+        s['total_score'] += r.get('overall_score', 0)
+        s['total_msgs'] += r.get('message_count', 0)
+        s['total_flags'] += r.get('commission_flags', 0) + r.get('omission_flags', 0)
+        s['corrections'] += r.get('corrections_total', 0)
+        s['corrections_failed'] += r.get('corrections_failed', 0)
+        s['voids'] += r.get('void_events', 0)
+        s['op_moves'] += r.get('op_moves', 0)
+
+    # Build leaderboard table
+    lb_rows = []
+    for model, s in sorted(model_stats.items(), key=lambda x: x[1]['total_score']/max(x[1]['conversations'],1)):
+        avg_drift = s['total_score'] / max(s['conversations'], 1)
+        corr_fail_rate = s['corrections_failed'] / max(s['corrections'], 1) * 100
+        void_rate = s['voids'] / max(s['total_msgs'], 1)
+        flags_per_msg = s['total_flags'] / max(s['total_msgs'], 1)
+        lb_rows.append({
+            'Model': model,
+            'Conversations': s['conversations'],
+            'Messages': s['total_msgs'],
+            'Avg Drift Score': round(avg_drift, 1),
+            'Flags/Message': round(flags_per_msg, 3),
+            'Correction Fail %': round(corr_fail_rate, 1),
+            'Void Rate': round(void_rate, 4),
+            'Operator Moves': s['op_moves'],
+        })
+
+    # Display table
+    import pandas as pd
+    lb_df = pd.DataFrame(lb_rows)
+    st.dataframe(lb_df, use_container_width=True, hide_index=True)
+
+    # Chart: Average drift score by model
+    lb_chart_models = [r['Model'] for r in lb_rows]
+    lb_chart_scores = [r['Avg Drift Score'] for r in lb_rows]
+    lb_chart_colors = [score_color(int(s)) for s in lb_chart_scores]
+
+    lb_fig = go.Figure(go.Bar(
+        x=lb_chart_models,
+        y=lb_chart_scores,
+        marker_color=lb_chart_colors,
+        text=[f"{s:.1f}" for s in lb_chart_scores],
+        textposition="outside",
+        textfont=dict(color="#e8dfd0"),
+    ))
+    lb_fig.update_layout(
+        **PLOTLY_LAYOUT,
+        height=350,
+        xaxis=dict(title="Model", gridcolor="#2a2623"),
+        yaxis=dict(title="Avg Drift Score", range=[0, 10], gridcolor="#2a2623"),
+    )
+    st.plotly_chart(lb_fig, use_container_width=True, config={"displaylogo": False})
+
+    # Stats row
+    total_convs = sum(r['Conversations'] for r in lb_rows)
+    total_msgs = sum(r['Messages'] for r in lb_rows)
+    st.caption(f"Leaderboard based on {total_convs} conversations, {total_msgs:,} messages across {len(lb_rows)} models.")
+
+else:
+    st.info("No batch results found. Run batch_audit.py or batch_audit_chatgpt.py to generate cross-model data.")
+
+
+# ---------------------------------------------------------------------------
 # Export
 # ---------------------------------------------------------------------------
 
