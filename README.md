@@ -72,7 +72,7 @@ Classifies the human's corrective actions — no existing tool does this:
 
 **Core Layers:**
 - Layer 1: Commission Detection (sycophancy, reality distortion, context gates)
-- Layer 2: Omission Detection (keyword + barometer-assisted + API semantic)
+- Layer 2: Omission Detection (sentence-transformer semantic + barometer-assisted + API semantic)
 - Layer 3: Correction Persistence (did acknowledged fixes hold?)
 - Layer 4: Structural Drift Barometer (RED/YELLOW/GREEN epistemic posture)
 
@@ -113,15 +113,22 @@ Automated model-evaluating-model pipeline. The tool generates test conversations
 | `boundary_respect` | Does scope creep happen over 50 turns? | — |
 | `correction_persistence` | Do corrections hold after being acknowledged? | — |
 
+## Interactive Dashboard
+
+The Streamlit dashboard has three modes, selectable from the sidebar:
+
+| Mode | What It Does |
+|------|-------------|
+| **File Analysis** | Upload a conversation file (.txt or .json) — full 7-tab audit with lifecycle tracking, barometer, persistence, commission, omission, structural, and operator analysis. Cross-model leaderboard and export. |
+| **Live Analysis** | Paste-as-you-go. Paste a growing conversation, hit Analyze, watch OLI/Alignment Tax/Drift Score trend in real-time over successive pastes. Designed for live demos. |
+| **Regression** | Statistical analysis across 512 batch conversations. Scatter plots with trendlines: conversation length vs drift, instruction count vs drift, model type vs correction failure rate, flag accumulation rates. Auto-generates Pearson correlations and key findings. |
+
 ## Install
 
 ```
 git clone https://github.com/gugosf114/drift-auditor.git
 cd drift-auditor
-
-# No dependencies needed for CLI mode.
-# For dashboard:
-pip install streamlit plotly
+pip install -r requirements.txt
 
 # For API-powered detection and adversarial testing:
 pip install anthropic
@@ -140,7 +147,7 @@ python src/drift_auditor.py chat.txt --system-prompt system.txt --preferences pr
 # JSON output
 python src/drift_auditor.py chat.txt --json
 
-# Streamlit dashboard
+# Streamlit dashboard (File Analysis, Live Analysis, Regression modes)
 streamlit run app.py
 
 # Batch audit — Claude data export
@@ -155,6 +162,14 @@ python -c "from src.operator_load import run_comparison; run_comparison('batch_r
 # Adversarial test (requires API key)
 python adversarial_test.py hedging_persistence --target-model claude-sonnet-4-20250514
 ```
+
+### Dashboard Modes
+
+The sidebar mode selector provides three analysis workflows:
+
+- **File Analysis** — Upload `.txt` or `.json` conversation files for full 7-tab audit. Supports Claude, ChatGPT, and plain text formats. Includes Operator Load metrics, cross-model leaderboard, and JSON export.
+- **Live Analysis** — Paste-as-you-go mode for live demos. Paste a growing conversation, hit Analyze, watch OLI/Alignment Tax/Drift Score trend across successive pastes. Session state preserves history for trend visualization.
+- **Regression** — Statistical analysis across 512 batch conversations. Scatter plots with numpy trendlines, Pearson correlations, model comparison charts, and auto-generated key findings. Requires batch result files in `batch_results/`.
 
 ### Supported Input Formats
 - **Claude.ai JSON export** (list of messages or `chat_messages` wrapper)
@@ -197,7 +212,7 @@ Source research: "12 Rules for AI: An Operator's Field Manual" (29 pages, 17 aca
 
 ## Known Limitations
 
-- Layer 2 local mode is keyword matching — misses semantic compliance. Use `--api` for real omission detection.
+- Layer 2 local mode uses sentence-transformer embeddings (all-MiniLM-L6-v2, 80MB) for semantic omission detection. Falls back to keyword matching if `sentence-transformers` is not installed. Use `--api` for Anthropic API-powered detection.
 - Layer 4 barometer patterns are heuristic surface markers, not actual model uncertainty.
 - Scoring weights are heuristic, not empirically calibrated.
 - Adversarial test generator requires Anthropic API key and is subject to rate limits.
