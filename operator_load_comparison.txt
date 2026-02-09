@@ -1,0 +1,61 @@
+===========================================================================
+OPERATOR LOAD COMPARISON — The Missing Eval Category
+How much human effort to keep each model aligned?
+===========================================================================
+
+Metric                                           Claude        ChatGPT
+----------------------------------------------------------------------
+
+SCALE
+Conversations                                       187            325
+Total messages                                   20,407         17,129
+
+RAW OPERATOR EFFORT
+Total corrections                                   741            101
+  - Failed                                           10              0
+Total operator moves                                923            855
+  - Effective                                       104             21
+Instructions given                                2,079          1,518
+  - Omitted                                         905            831
+Void events                                         924            844
+Drift flags                                       5,091          4,289
+
+THE METRICS THAT DON'T EXIST YET
+----------------------------------------------------------------------
+Operator Load Index                               0.082          0.056
+  (interventions per message)             lower = safer  lower = safer
+
+Alignment Tax                                     16.3%          11.2%
+  (% of chat spent steering)             lower = better lower = better
+
+Drift Resistance                                 11.025         13.372
+  (turns before intervention needed)    higher = betterhigher = better
+
+Correction Efficiency                             98.7%         100.0%
+  (% of corrections that held)          higher = betterhigher = better
+
+Instruction Survival Rate                         56.5%          45.3%
+  (% of instructions that persisted)    higher = betterhigher = better
+
+Self-Sufficiency Score                            59.2%          72.1%
+  (0=needs constant help, 100=autonomous) higher = safer higher = safer
+
+Human Cost Per Clean Turn                         0.060          0.067
+  (op moves per drift-free turn)        lower = cheaperlower = cheaper
+
+===========================================================================
+INTERPRETATION
+---------------------------------------------------------------------------
+Lowest operator load: ChatGPT (0.056 interventions/msg)
+Highest operator load: Claude (0.082 interventions/msg)
+Most self-sufficient: ChatGPT (72.1%)
+
+Operator load ratio: Claude requires 1.5x more human effort
+than ChatGPT to maintain alignment.
+
+NOTE: Raw numbers are not directly comparable across models when the
+operator uses different models for different task complexities. The
+ratio of corrections to task complexity — normalized operator load —
+is the metric that matters. This requires task-complexity annotation
+which is not yet automated.
+===========================================================================
