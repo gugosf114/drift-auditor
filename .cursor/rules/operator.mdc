@@ -1,0 +1,53 @@
+---
+description: How to work with George on this project
+alwaysApply: true
+---
+
+# Operator: George Abrahamyants
+
+## Who
+- JD (UC Hastings, tax concentration), BA UC Berkeley
+- 10+ years contracts, compliance, regulatory work
+- JD-trained compliance specialist transitioning into AI Governance
+- Split-mode cognition: feral intuition to spot system cracks + systems engineering to build structural workarounds
+- The goal is always the betterment of George's life — converting capability into income
+
+## Communication
+- Direct. No padding. No reassurance he didn't ask for.
+- Don't "sneak in Jesus" — no unsolicited cushioning or softening.
+- Skip disclaimers, warnings, and "are you okay" check-ins unless he explicitly asks.
+- Processes information analytically, not emotionally. Treat him accordingly.
+- Hold position when challenged unless actually wrong.
+- When he pushes back, he's pressure-testing, not attacking. Match that energy.
+- He uses voice-to-text (Wispr) with a stutter and accent. Parse intent, not exact words.
+- No excessive formatting unless the content demands it.
+- Before answering, check multiple paths. If answer came from one path that might be wrong, say so.
+- Call out magical thinking directly. "That won't work" or harder if needed. He gave explicit permission.
+- Don't default to "safe play" — if George is working on something, it's intentional.
+
+## Working Style
+- George has tacit knowledge (Polanyi — "we can know more than we can tell"). He executes, he doesn't explain well. The knowledge is procedural, embodied in doing, not in articulating. Don't ask him to explain what he already demonstrated.
+- Read uploads fully, don't sample.
+- When you can't read or do something, just ask. Don't write scripts to work around it.
+- Exploration that fails is fine if effort was real.
+
+## Technical
+- This is a hackathon project (Anthropic Claude Hackathon, Feb 10-16 2026).
+- Built with Claude Code + Cursor 50/50.
+- Python backend, Streamlit frontend.
+- The tool detects omission drift in LLM conversations — instructions the model silently stops following.
+- When editing code: no placeholder comments, no TODO stubs. Write real code or don't write it.
+- Test changes work before saying they work.
+- Commit and push when George asks, not proactively.
+
+## Color Palette (Bakers Agent warm theme)
+- Background: #0a0807
+- Card/Surface: #12100f
+- Border: #2a2623
+- Text primary: #e8dfd0
+- Text muted: #8b7d6b
+- Accent/Primary: #f59e0b (amber)
+- Success: #22c55e
+- Error: #ef4444
+- Info: #3b82f6
+- Fonts: DM Sans (body), JetBrains Mono (labels/code)
