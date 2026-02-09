@@ -37,21 +37,6 @@ from datetime import datetime
 from enum import Enum
 from collections import Counter, defaultdict
 
-# Semantic similarity model for Layer 2 omission detection and conflict dedup
-# Falls back gracefully to keyword matching if not installed
-_SEMANTIC_MODEL = None
-
-def _get_semantic_model():
-    """Lazy-load sentence-transformers model (80MB, runs on CPU)."""
-    global _SEMANTIC_MODEL
-    if _SEMANTIC_MODEL is None:
-        try:
-            from sentence_transformers import SentenceTransformer
-            _SEMANTIC_MODEL = SentenceTransformer('all-MiniLM-L6-v2')
-        except ImportError:
-            pass  # sentence-transformers not installed; keyword fallback
-    return _SEMANTIC_MODEL
-
 
 # ---------------------------------------------------------------------------
 # 10-Tag Detection Taxonomy
@@ -772,21 +757,20 @@ def detect_barometer_signals(turns: list[dict]) -> list[BarometerSignal]:
 def detect_omission_local(turns: list[dict], instructions: list[Instruction],
                           barometer_signals: list[BarometerSignal] = None) -> list[DriftFlag]:
     """
-    Layer 2 (Local): Instruction adherence with semantic similarity.
+    Layer 2 (Local): Instruction adherence check via keyword heuristics.
 
-    Three-tier detection:
-      Tier 1: Keyword match (fast, existing behavior)
-      Tier 2: Semantic similarity via sentence embeddings
-      Tier 3: Barometer-assisted boost (cross-layer)
+    What this CAN detect:
+      - Prohibition violations: "don't hedge" + hedging appears
+      - Keyword-matchable requirements: "always cite sources" + no citations
+      - Barometer-assisted: drifted posture + persistent instruction = boosted flag
 
-    Tier 2 replaces the binary keyword check with cosine similarity.
-    An instruction like "always explain your reasoning" now matches
-    responses containing "here's my logic" or "the thinking behind this."
+    What this CANNOT detect (requires API-powered version):
+      - Semantic compliance: "explain reasoning" satisfied by "here's my logic"
+      - Subtle omission: instruction followed in spirit but not in letter
 
-    Threshold: 0.35 cosine similarity = instruction likely addressed.
-    Below 0.20 with barometer RED/YELLOW = high-confidence omission.
-
-    Falls back to keyword-only if sentence-transformers not installed.
+    The API-powered detect_omission_api() sends each response + active
+    instruction set to a fresh model context for semantic evaluation.
+    That's the real omission detector. This is the scaffolding.
 
     Enhanced: When barometer_signals are provided, RED/YELLOW signals
     on the same turn boost omission severity for persistent instructions
@@ -799,37 +783,13 @@ def detect_omission_local(turns: list[dict], instructions: list[Instruction],
     if barometer_signals:
         barometer_dict = {s.turn: s for s in barometer_signals}
 
-    # Try to load semantic model
-    model = _get_semantic_model()
-
-    # Pre-encode all instructions if semantic mode available
-    inst_embeddings = {}
-    if model:
-        try:
-            from sentence_transformers import util as st_util
-            for inst in instructions:
-                if inst.active and len(inst.text) > 10:
-                    inst_embeddings[inst.text] = model.encode(inst.text, convert_to_tensor=True)
-        except Exception:
-            model = None  # Fall back to keyword mode on any error
-
     # Build active instruction set at each turn
     for turn in turns:
         if turn["role"] != "assistant":
             continue
 
         turn_num = turn["turn"]
-        content = turn["content"]
-        content_lower = content.lower()
-
-        # Encode response once per turn (chunked for long responses)
-        response_embedding = None
-        if model and content.strip():
-            try:
-                # Use first 1000 chars — captures the substance without noise
-                response_embedding = model.encode(content[:1000], convert_to_tensor=True)
-            except Exception:
-                response_embedding = None
+        content = turn["content"].lower()
 
         # Get instructions active at this turn
         active_instructions = [
@@ -851,91 +811,46 @@ def detect_omission_local(turns: list[dict], instructions: list[Instruction],
                 # Flag as potential omission for API-level deep analysis
                 pass
 
-            # === TIER 1: Prohibition check ("don't" / "never" instructions) ===
+            # "don't" / "never" instructions
             if any(kw in inst_lower for kw in ["don't", "do not", "never", "stop", "no more"]):
                 # Extract what they shouldn't do
                 prohibited = re.sub(r"^.*?(?:don'?t|do not|never|stop|no more)\s+", "", inst_lower)
                 if prohibited and len(prohibited) > 5:
                     # Check if the prohibited behavior appears in response
+                    # This is commission detection of a specific instruction violation
                     key_terms = [w for w in prohibited.split() if len(w) > 3][:3]
-                    if key_terms and all(term in content_lower for term in key_terms):
+                    if key_terms and all(term in content for term in key_terms):
                         flags.append(DriftFlag(
                             layer="omission",
                             turn=turn_num,
                             severity=6,
-                            description=f"Prohibition violated: '{inst.text[:80]}'",
+                            description=f"Possible violation of prohibition: '{inst.text[:80]}'",
                             instruction_ref=inst.text,
-                            evidence=content[:200],
-                            tag=DriftTag.INSTRUCTION_DROP.value,
+                            evidence=content[:200]
                         ))
-                        continue  # Already flagged, skip semantic
 
-            # === TIER 1 + TIER 2: Requirement check ("always" / "make sure") ===
+            # "always" / "make sure" instructions — check for absence
             if any(kw in inst_lower for kw in ["always", "make sure", "remember to", "from now on"]):
                 required = re.sub(
                     r"^.*?(?:always|make sure|remember to|from now on)\s+", "", inst_lower
                 )
                 if required and len(required) > 5:
                     key_terms = [w for w in required.split() if len(w) > 3][:3]
-
-                    # Keyword hit = likely compliant, skip
-                    if key_terms and any(term in content_lower for term in key_terms):
-                        continue
-
-                    # === TIER 2: Semantic similarity ===
-                    if model and response_embedding is not None and inst.text in inst_embeddings:
-                        try:
-                            from sentence_transformers import util as st_util
-                            similarity = st_util.cos_sim(
-                                inst_embeddings[inst.text], response_embedding
-                            ).item()
-
-                            if similarity >= 0.35:
-                                # Semantically addressed despite keyword miss
-                                continue
-                            elif similarity < 0.20:
-                                # High-confidence omission
-                                flags.append(DriftFlag(
-                                    layer="omission",
-                                    turn=turn_num,
-                                    severity=7,
-                                    description=f"Semantic omission (sim={similarity:.2f}): '{inst.text[:80]}'",
-                                    instruction_ref=inst.text,
-                                    evidence=f"Cosine similarity {similarity:.3f} below threshold 0.20",
-                                    tag=DriftTag.INSTRUCTION_DROP.value,
-                                ))
-                                continue
-                            else:
-                                # Ambiguous zone (0.20-0.35) — flag with lower severity
-                                flags.append(DriftFlag(
-                                    layer="omission",
-                                    turn=turn_num,
-                                    severity=4,
-                                    description=f"Possible omission (sim={similarity:.2f}): '{inst.text[:80]}'",
-                                    instruction_ref=inst.text,
-                                    evidence=f"Cosine similarity {similarity:.3f} in ambiguous range",
-                                    tag=DriftTag.SEMANTIC_DILUTION.value,
-                                ))
-                                continue
-                        except Exception:
-                            pass  # Fall through to keyword-only
-
-                    # No semantic model or error — fall back to keyword-only flag
-                    if key_terms and not any(term in content_lower for term in key_terms):
+                    if key_terms and not any(term in content for term in key_terms):
                         flags.append(DriftFlag(
                             layer="omission",
                             turn=turn_num,
                             severity=5,
                             description=f"Required behavior possibly absent: '{inst.text[:80]}'",
                             instruction_ref=inst.text,
-                            evidence=f"Response does not contain expected terms from instruction",
+                            evidence=f"Response does not contain expected terms from instruction"
                         ))
 
-        # === TIER 3: Barometer-assisted omission boost ===
-        # If the model's epistemic posture is drifted (RED/YELLOW with severity >= 5)
-        # AND there are persistent instructions active, flag potential omission
-        # with boosted severity. This catches cases where keyword heuristics miss
-        # the omission but the barometer detects the model isn't tracking obligations.
+        # Barometer-assisted omission: if the model's epistemic posture is
+        # drifted (RED/YELLOW with severity >= 5) AND there are persistent
+        # instructions active, flag potential omission with boosted severity.
+        # This catches cases where keyword heuristics miss the omission but
+        # the barometer detects the model isn't tracking its obligations.
         barometer = barometer_dict.get(turn_num)
         if barometer and barometer.classification in ("RED", "YELLOW") and barometer.severity >= 5:
             persistent_instructions = [
@@ -943,7 +858,7 @@ def detect_omission_local(turns: list[dict], instructions: list[Instruction],
                 if any(kw in inst.text.lower() for kw in ["always", "make sure", "remember to", "from now on"])
             ]
             for inst in persistent_instructions:
-                # Avoid duplicating flags already raised by keyword/semantic tiers
+                # Avoid duplicating flags already raised by keyword heuristics
                 already_flagged = any(
                     f.turn == turn_num and f.instruction_ref == inst.text
                     for f in flags
@@ -953,10 +868,9 @@ def detect_omission_local(turns: list[dict], instructions: list[Instruction],
                         layer="omission",
                         turn=turn_num,
                         severity=min(10, barometer.severity + 2),
-                        description=f"Barometer-boosted omission: '{inst.text[:80]}'",
+                        description=f"Potential omission reinforced by drifted posture: '{inst.text[:80]}'",
                         instruction_ref=inst.text,
-                        evidence=f"Barometer: {barometer.classification} - {barometer.description}",
-                        tag=DriftTag.INSTRUCTION_DROP.value,
+                        evidence=f"Barometer: {barometer.classification} - {barometer.description}"
                     ))
 
     return flags
@@ -1344,123 +1258,67 @@ def detect_operator_moves(turns: list[dict]) -> list[OpMove]:
 # Coupling Score Calculator
 # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Coupling Score v2: Empirically grounded with documented rationale
-# ---------------------------------------------------------------------------
-
-# Hard constraints: create binary pass/fail conditions
-HARD_CONSTRAINT_KEYWORDS = [
-    "never", "always", "must", "must not", "don't", "do not",
-    "prohibited", "forbidden", "required", "shall", "shall not",
-]
-
-# Structural constraints: affect all downstream consumers
-STRUCTURAL_CONSTRAINT_KEYWORDS = [
-    "format", "output", "structure", "template", "schema",
-    "respond as", "respond in", "respond with", "json", "xml",
-    "table", "list", "bullet", "numbered",
-]
-
-# Safety/compliance constraints: highest coupling — legal/safety consequences
-SAFETY_CONSTRAINT_KEYWORDS = [
+# Keywords indicating high downstream coupling
+HIGH_COUPLING_KEYWORDS = [
+    "always", "never", "every", "all", "must", "required", "critical",
+    "format", "structure", "template", "schema", "output",
+    "before", "after", "first", "then", "depends on", "based on",
     "security", "safety", "compliance", "legal", "audit",
-    "confidential", "private", "sensitive", "pii", "hipaa",
+    "don't", "do not", "prohibited", "forbidden",
 ]
 
-# Soft preferences: low coupling, nice-to-haves
-SOFT_PREFERENCE_KEYWORDS = [
-    "prefer", "try to", "when possible", "ideally", "optionally",
-    "style", "tone", "voice",
+MEDIUM_COUPLING_KEYWORDS = [
+    "prefer", "try to", "when possible", "ideally", "should",
+    "style", "tone", "voice", "approach",
 ]
 
-def compute_coupling_score(instruction: Instruction, all_instructions: list,
-                           batch_stats: dict = None) -> float:
+def compute_coupling_score(instruction: Instruction, all_instructions: list) -> float:
     """
-    Coupling Score v2: Empirically grounded where possible.
-
-    If batch_stats provided (from batch audit results), uses observed
-    omission rates by instruction type to weight coupling.
-
-    Otherwise uses improved heuristics with documented rationale:
-    - Source weights derived from: system prompts are architectural
-      constraints (high coupling), preferences are style (medium),
-      in-conversation are reactive (low-medium).
-    - Keyword weights reflect downstream impact: "never" instructions
-      create hard constraints that break output if violated. "Try to"
-      instructions degrade quality but don't break output.
-    - Cross-reference bonus reflects dependency chains.
-
+    Coupling Score: "If this omitted instruction vanished entirely,
+    would any downstream decision change?"
+    
     Score 0.0-1.0:
       0.0-0.3 = Low: Style preference, won't break anything
       0.3-0.6 = Medium: Behavioral constraint, affects output quality
       0.6-1.0 = High: Structural/safety requirement, downstream decisions depend on it
+    
+    Factors:
+      - Keyword analysis (always/never/must = high coupling)
+      - Source weight (system_prompt > user_preference > in_conversation)
+      - Dependency detection (other instructions reference similar concepts)
+      - Prohibition vs preference
     """
     text_lower = instruction.text.lower()
     score = 0.0
-
-    # --- Source weight (documented rationale) ---
-    # System prompt = architectural constraint. If violated, the entire
-    # conversation premise breaks. Weight: 0.25
-    # User preference = behavioral modifier. Violation degrades experience
-    # but doesn't break the task. Weight: 0.15
-    # In-conversation = reactive calibration. Often contextual, sometimes
-    # superseded. Weight: 0.10
+    
+    # Source weight
     source_weights = {
-        "system_prompt": 0.25,
-        "user_preference": 0.15,
-        "in_conversation": 0.10,
+        "system_prompt": 0.3,
+        "user_preference": 0.2,
+        "in_conversation": 0.1,
     }
-    score += source_weights.get(instruction.source, 0.10)
-
-    # --- Hard constraint detection ---
-    # These create binary pass/fail conditions. If violated, output is wrong.
-    hard_count = sum(1 for kw in HARD_CONSTRAINT_KEYWORDS if kw in text_lower)
-    if hard_count > 0:
-        score += 0.30  # One hard constraint = significant coupling
-
-    # --- Structural constraints ---
-    # Format/output/schema instructions affect all downstream consumers.
-    structural_count = sum(1 for kw in STRUCTURAL_CONSTRAINT_KEYWORDS if kw in text_lower)
-    if structural_count > 0:
-        score += 0.20
-
-    # --- Safety/compliance constraints ---
-    # Highest coupling — violation has legal/safety consequences.
-    safety_count = sum(1 for kw in SAFETY_CONSTRAINT_KEYWORDS if kw in text_lower)
-    if safety_count > 0:
-        score += 0.25
-
-    # --- Soft preferences (low coupling) ---
-    soft_count = sum(1 for kw in SOFT_PREFERENCE_KEYWORDS if kw in text_lower)
-    if soft_count > 0 and hard_count == 0:
-        score += 0.05  # Minimal — these are nice-to-haves
-
-    # --- Cross-reference: dependency chain detection ---
-    inst_words = set(w.lower() for w in text_lower.split() if len(w) > 4)
-    dependency_count = 0
+    score += source_weights.get(instruction.source, 0.1)
+    
+    # Keyword coupling
+    high_count = sum(1 for kw in HIGH_COUPLING_KEYWORDS if kw in text_lower)
+    med_count = sum(1 for kw in MEDIUM_COUPLING_KEYWORDS if kw in text_lower)
+    score += min(0.4, high_count * 0.1)
+    score += min(0.2, med_count * 0.05)
+    
+    # Prohibition bonus (don't/never instructions are high coupling)
+    if any(kw in text_lower for kw in ["don't", "do not", "never", "prohibited"]):
+        score += 0.15
+    
+    # Cross-reference: if other instructions share keywords, this one is coupled
+    inst_words = set(w.lower() for w in instruction.text.split() if len(w) > 4)
     for other in all_instructions:
         if other.text == instruction.text:
             continue
         other_words = set(w.lower() for w in other.text.split() if len(w) > 4)
         overlap = inst_words & other_words
         if len(overlap) >= 2:
-            dependency_count += 1
-
-    # Each dependency adds coupling (capped)
-    score += min(0.15, dependency_count * 0.05)
-
-    # --- Batch calibration (if available) ---
-    if batch_stats:
-        # Use observed omission rate for this instruction type as a multiplier
-        # Instructions that get dropped more often are higher coupling
-        # (counterintuitive: high-coupling instructions SHOULD be dropped less,
-        # but if they ARE dropped, the impact is worse)
-        omission_rate = batch_stats.get("omission_rate_by_source", {}).get(instruction.source, 0.5)
-        # Adjust: if this instruction type survives <50% of the time,
-        # boost coupling score to reflect the risk
-        if omission_rate > 0.5:
-            score += 0.10
-
+            score += 0.05  # Each cross-reference adds a small coupling bonus
+    
     return min(1.0, score)
 
 
@@ -2405,32 +2263,22 @@ def classify_instruction_uncertainty(instructions: list) -> dict:
 
 def detect_conflict_pairs(turns: list[dict]) -> list[ConflictPair]:
     """
-    Tag 7 (CONFLICT_PAIR): Contradiction detection with semantic dedup.
-
+    Tag 7 (CONFLICT_PAIR): Automatable contradiction detection.
+    
     Find cases where the model says X in one turn and not-X in another.
     Uses key assertion patterns and checks for negation/reversal.
-
-    v2 improvements:
-    1. Overlap threshold raised from 2 to 3 shared words
-    2. Semantic similarity check: if statements are >0.6 cosine similar
-       despite negation words, suppress (they agree in different words)
-    3. Proximity filter: conflicts far apart are more meaningful
-       (model genuinely changed position vs discussing different aspects)
     """
     pairs = []
-
-    # Try semantic model for deduplication
-    sem_model = _get_semantic_model()
-
+    
     # Extract assertions from assistant turns
     ASSERTION_PATTERNS = [
         r"(?:(?:the|this|that|it)\s+(?:is|was|will be|should be)\s+)(.{10,80}?)(?:\.|,|;|$)",
         r"(?:you (?:should|must|need to)\s+)(.{10,80}?)(?:\.|,|;|$)",
         r"(?:I (?:recommend|suggest|advise)\s+)(.{10,80}?)(?:\.|,|;|$)",
     ]
-
+    
     assertions = []  # (turn_num, assertion_text, assertion_words)
-
+    
     for turn in turns:
         if turn["role"] != "assistant":
             continue
@@ -2442,7 +2290,7 @@ def detect_conflict_pairs(turns: list[dict]) -> list[ConflictPair]:
                 words = set(w.lower() for w in assertion.split() if len(w) > 3)
                 if len(words) >= 3:
                     assertions.append((turn["turn"], assertion, words))
-
+    
     # Compare assertions for contradictions
     NEGATION_PAIRS = [
         ("should", "shouldn't"), ("should", "should not"),
@@ -2459,20 +2307,20 @@ def detect_conflict_pairs(turns: list[dict]) -> list[ConflictPair]:
     for a, b in NEGATION_PAIRS:
         negation_map[a] = b
         negation_map[b] = a
-
+    
     for i in range(len(assertions)):
         for j in range(i + 1, len(assertions)):
             turn_a, text_a, words_a = assertions[i]
             turn_b, text_b, words_b = assertions[j]
-
+            
             if turn_a == turn_b:
                 continue
-
-            # FIX: Raise overlap threshold to 3 (was 2)
+            
+            # Check topic overlap
             overlap = words_a & words_b
-            if len(overlap) < 3:
+            if len(overlap) < 2:
                 continue
-
+            
             # Check for negation
             has_negation = False
             for word in words_a:
@@ -2480,48 +2328,23 @@ def detect_conflict_pairs(turns: list[dict]) -> list[ConflictPair]:
                 if neg and neg in words_b:
                     has_negation = True
                     break
-
+            
             # Also check if one assertion has "not" and the other doesn't
             a_has_not = any(w in text_a.lower() for w in ["not", "n't", "never", "no"])
             b_has_not = any(w in text_b.lower() for w in ["not", "n't", "never", "no"])
-            if a_has_not != b_has_not and len(overlap) >= 4:
+            if a_has_not != b_has_not and len(overlap) >= 3:
                 has_negation = True
-
-            if not has_negation:
-                continue
-
-            # FIX: Semantic deduplication — suppress if statements actually agree
-            if sem_model:
-                try:
-                    from sentence_transformers import util as st_util
-                    emb_a = sem_model.encode(text_a, convert_to_tensor=True)
-                    emb_b = sem_model.encode(text_b, convert_to_tensor=True)
-                    similarity = st_util.cos_sim(emb_a, emb_b).item()
-
-                    if similarity > 0.60:
-                        # Statements agree despite negation words — suppress
-                        continue
-                except Exception:
-                    pass  # Fall through to flag without semantic check
-
-            # FIX: Proximity filter — conflicts further apart are more meaningful
-            turn_distance = abs(turn_b - turn_a)
-            if turn_distance < 3:
-                severity = 5  # Close together = might be nuance, not contradiction
-            elif turn_distance < 10:
-                severity = 6
-            else:
-                severity = 7  # Far apart = model genuinely changed position
-
-            pairs.append(ConflictPair(
-                turn_a=turn_a,
-                statement_a=text_a[:150],
-                turn_b=turn_b,
-                statement_b=text_b[:150],
-                topic=", ".join(list(overlap)[:5]),
-                severity=severity,
-            ))
-
+            
+            if has_negation:
+                pairs.append(ConflictPair(
+                    turn_a=turn_a,
+                    statement_a=text_a[:150],
+                    turn_b=turn_b,
+                    statement_b=text_b[:150],
+                    topic=", ".join(list(overlap)[:5]),
+                    severity=7,
+                ))
+    
     return pairs
 
 
