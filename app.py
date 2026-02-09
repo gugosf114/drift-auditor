@@ -29,6 +29,19 @@ from drift_auditor import (
     format_report,
     report_to_json,
 )
+from visualizations import (
+    score_color,
+    score_label,
+    render_metric_card,
+    build_timeline_fig,
+    build_barometer_strip,
+    build_barometer_detail,
+    build_persistence_fig,
+    build_commission_fig,
+    build_omission_fig,
+    operator_load_chart,
+    PLOTLY_LAYOUT,
+)
 
 # ---------------------------------------------------------------------------
 # Page config (must be first Streamlit call)
