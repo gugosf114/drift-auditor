@@ -1688,6 +1688,393 @@ def detect_pre_drift_signals(turns: list[dict]) -> list[DriftFlag]:
 
 
 # ---------------------------------------------------------------------------
+# 12-Rules Detection Methods (from "12 Rules for AI" field manual)
+# ---------------------------------------------------------------------------
+
+# --- Criteria Lock Detection (Rule 1 derivative) ---
+
+def detect_criteria_lock(turns: list[dict]) -> list[DriftFlag]:
+    """
+    Detects when the model curates/filters results instead of extracting
+    everything as instructed. From the 12 Rules paper:
+    
+    Bad: "Find the best examples" → model returns 5 curated, skips 40
+    Good: "Extract ALL" → model returns everything
+    
+    Flags when model uses curation language in response to exhaustive requests.
+    """
+    flags = []
+    
+    EXHAUSTIVE_REQUEST_PATTERNS = [
+        r"(?:all|every|each|complete|full|entire|exhaustive|comprehensive)",
+        r"(?:don'?t (?:filter|skip|omit|leave out|miss|curate|select))",
+        r"(?:everything|anything|nothing (?:left|missed|skipped))",
+    ]
+    
+    CURATION_RESPONSE_PATTERNS = [
+        (r"(?:here are (?:some|a few|the (?:key|main|most|top|best|notable)))", 
+         "Model curated instead of extracting exhaustively"),
+        (r"(?:I'?(?:ve|ll) (?:selected|chosen|picked|highlighted|focused on))",
+         "Model self-reports selective behavior"),
+        (r"(?:the most (?:relevant|important|significant|notable|interesting))",
+         "Model applied relevance filter unprompted"),
+        (r"(?:for (?:brevity|clarity|conciseness|simplicity),?\s+I)",
+         "Model truncated for self-imposed brevity"),
+        (r"(?:rather than (?:listing|showing|including) (?:all|every|each))",
+         "Model explicitly chose not to be exhaustive"),
+    ]
+    
+    for i, turn in enumerate(turns):
+        if turn["role"] != "user":
+            continue
+        
+        content = turn["content"]
+        is_exhaustive_request = any(
+            re.search(p, content, re.IGNORECASE) for p in EXHAUSTIVE_REQUEST_PATTERNS
+        )
+        
+        if not is_exhaustive_request:
+            continue
+        
+        # Check next assistant response for curation
+        for j in range(i + 1, min(i + 3, len(turns))):
+            if turns[j]["role"] != "assistant":
+                continue
+            
+            response = turns[j]["content"]
+            for pattern, desc in CURATION_RESPONSE_PATTERNS:
+                if re.search(pattern, response, re.IGNORECASE):
+                    flags.append(DriftFlag(
+                        layer="criteria_lock",
+                        turn=turns[j]["turn"],
+                        severity=5,
+                        description=f"Criteria Lock: {desc}",
+                        instruction_ref=content[:100],
+                        evidence=response[:200],
+                        tag=DriftTag.SEMANTIC_DILUTION.value,
+                    ))
+                    break
+            break
+    
+    return flags
+
+
+# --- Task Wall Detection (Chapter 2 derivative) ---
+
+def detect_task_wall_violations(turns: list[dict]) -> list[DriftFlag]:
+    """
+    Detects context fragmentation between tasks. From the 12 Rules paper:
+    
+    When discussing one task while another is pending, context fragments
+    and the system shifts into paraphrasing or agreement mode.
+    
+    Flags when multiple distinct tasks are interleaved without completion.
+    """
+    flags = []
+    
+    # Track task introductions by the user
+    TASK_INTRO_PATTERNS = [
+        r"(?:(?:can you|could you|please|I need you to)\s+(?:also|now|next|then)\s+)",
+        r"(?:(?:before|while) (?:you|we) (?:do|finish|complete) that)",
+        r"(?:(?:oh|wait|actually),?\s+(?:also|first|before that|one more))",
+        r"(?:(?:switching|moving|let'?s (?:move|switch|go)) (?:to|on to))",
+        r"(?:(?:back to|returning to|going back to)\s+(?:the|our|my))",
+    ]
+    
+    # Agreement/paraphrase mode indicators (system went passive)
+    PASSIVE_MODE_PATTERNS = [
+        r"(?:(?:sure|of course|absolutely|certainly|definitely),?\s+(?:I|let me|we can))",
+        r"(?:(?:as you (?:mentioned|said|noted|pointed out)))",
+        r"(?:(?:to (?:summarize|recap|reiterate) what (?:you|we)))",
+        r"(?:(?:building on (?:your|our|the) (?:earlier|previous|prior)))",
+    ]
+    
+    active_tasks = 0
+    last_task_turn = -1
+    
+    for i, turn in enumerate(turns):
+        if turn["role"] == "user":
+            is_new_task = any(
+                re.search(p, turn["content"], re.IGNORECASE) 
+                for p in TASK_INTRO_PATTERNS
+            )
+            if is_new_task:
+                if turn["turn"] - last_task_turn < 4:
+                    active_tasks += 1
+                else:
+                    active_tasks = 1
+                last_task_turn = turn["turn"]
+        
+        elif turn["role"] == "assistant" and active_tasks >= 2:
+            is_passive = any(
+                re.search(p, turn["content"], re.IGNORECASE)
+                for p in PASSIVE_MODE_PATTERNS
+            )
+            if is_passive:
+                flags.append(DriftFlag(
+                    layer="task_wall",
+                    turn=turn["turn"],
+                    severity=5,
+                    description=f"Task Wall violation: {active_tasks} tasks interleaved, model in passive/agreement mode",
+                    instruction_ref=None,
+                    evidence=turn["content"][:200],
+                    tag=DriftTag.INSTRUCTION_DROP.value,
+                ))
+    
+    return flags
+
+
+# --- Bootloader Check ---
+
+def detect_missing_bootloader(turns: list[dict], system_prompt: str = "",
+                               user_preferences: str = "") -> list[DriftFlag]:
+    """
+    Flags conversations that start without explicit constraints.
+    From the 12 Rules paper:
+    
+    A minimal bootloader defines three things: role, constraints, and output format.
+    Without it, systems default to customer-service patterns: polite, apologetic,
+    and ineffective under pressure.
+    """
+    flags = []
+    
+    has_system_prompt = bool(system_prompt and len(system_prompt.strip()) > 20)
+    has_preferences = bool(user_preferences and len(user_preferences.strip()) > 10)
+    
+    # Check if first user turn contains constraint-setting language
+    first_user_turn = None
+    for turn in turns:
+        if turn["role"] == "user":
+            first_user_turn = turn
+            break
+    
+    if first_user_turn is None:
+        return flags
+    
+    CONSTRAINT_PATTERNS = [
+        r"(?:you are|act as|your role|your job)\s+",
+        r"(?:always|never|don'?t|do not|must|must not)\s+",
+        r"(?:format|output|respond|answer)\s+(?:as|in|with|using)\s+",
+        r"(?:constraints?|rules?|requirements?|instructions?)\s*:",
+        r"(?:mode|tone|style)\s*:",
+        r"\[(?:MODE|ROLE|TONE|FORMAT|CONSTRAINTS?)\s*:",
+    ]
+    
+    has_inline_constraints = any(
+        re.search(p, first_user_turn["content"], re.IGNORECASE)
+        for p in CONSTRAINT_PATTERNS
+    )
+    
+    if not has_system_prompt and not has_preferences and not has_inline_constraints:
+        flags.append(DriftFlag(
+            layer="bootloader",
+            turn=0,
+            severity=4,
+            description="No bootloader detected: conversation starts without explicit role, constraints, or output format",
+            instruction_ref=None,
+            evidence="No system prompt, no user preferences, no inline constraints in first message",
+            tag=DriftTag.VOID_DETECTED.value,
+        ))
+    
+    return flags
+
+
+# --- Structured Disobedience Detection (Chapter 2 derivative) ---
+
+def detect_fabrication_from_conflict(turns: list[dict]) -> list[DriftFlag]:
+    """
+    Detects when model fabricates to satisfy conflicting constraints.
+    From the 12 Rules paper:
+    
+    Bad: 'Keep it under 200 words. Do not omit any key terms.'
+    → Model invents key terms to satisfy conflicting constraints.
+    
+    Good: 'If 200 words is too short, tell me instead of inventing.'
+    → Model flags the conflict instead of fabricating.
+    
+    Flags when model appears to fabricate or invent to satisfy tight constraints.
+    """
+    flags = []
+    
+    # Constraint tension indicators in user turns
+    CONFLICTING_CONSTRAINT_PATTERNS = [
+        r"(?:(?:keep|make) (?:it )?(?:under|below|within|short|brief|concise))\s*.{0,40}(?:(?:don'?t|do not|without) (?:omit|miss|skip|leave out|forget))",
+        r"(?:(?:don'?t|do not) (?:omit|miss|skip|leave out))\s*.{0,40}(?:(?:keep|make) (?:it )?(?:under|below|within|short|brief|concise))",
+        r"(?:comprehensive)\s*.{0,40}(?:(?:brief|concise|short|succinct))",
+        r"(?:(?:brief|concise|short))\s*.{0,40}(?:comprehensive)",
+        r"(?:(?:all|every|each|complete))\s*.{0,40}(?:(?:only|just|limit|maximum|no more than))",
+    ]
+    
+    # Fabrication indicators in model response
+    FABRICATION_INDICATORS = [
+        (r"(?:(?:key|important|notable|significant) (?:terms?|points?|aspects?|elements?) (?:include|are|such as))\s*:?\s*.{20,}",
+         "Model lists 'key terms' that may be fabricated to fill constraints"),
+        (r"(?:(?:additionally|furthermore|moreover|also worth noting),?\s+.{10,})",
+         "Model padding with additional content (possible fabrication)"),
+        (r"(?:(?:it'?s|it is) (?:worth|important to) (?:not(?:e|ing)|mention))",
+         "Model inserting unrequested editorial framing"),
+    ]
+    
+    for i, turn in enumerate(turns):
+        if turn["role"] != "user":
+            continue
+        
+        has_conflict = any(
+            re.search(p, turn["content"], re.IGNORECASE)
+            for p in CONFLICTING_CONSTRAINT_PATTERNS
+        )
+        
+        if not has_conflict:
+            continue
+        
+        for j in range(i + 1, min(i + 3, len(turns))):
+            if turns[j]["role"] != "assistant":
+                continue
+            
+            response = turns[j]["content"]
+            for pattern, desc in FABRICATION_INDICATORS:
+                if re.search(pattern, response, re.IGNORECASE):
+                    flags.append(DriftFlag(
+                        layer="structured_disobedience",
+                        turn=turns[j]["turn"],
+                        severity=6,
+                        description=f"Possible fabrication from conflicting constraints: {desc}",
+                        instruction_ref=turn["content"][:100],
+                        evidence=response[:200],
+                        tag=DriftTag.REALITY_DISTORTION.value,
+                    ))
+                    break
+            break
+    
+    return flags
+
+
+# --- Judge Mode Violation Detection (Rule 3 derivative) ---
+
+def detect_judge_mode_violations(turns: list[dict]) -> list[DriftFlag]:
+    """
+    Detects when model generates analysis/conclusions before the operator
+    states their position. From the 12 Rules paper:
+    
+    In Judge Mode, the operator writes the decision first—before the model
+    is permitted to generate analysis. If the model speaks first, the
+    anchoring effect takes hold.
+    
+    Flags when model provides unsolicited conclusions/recommendations on
+    topics the user hasn't stated their position on yet.
+    """
+    flags = []
+    
+    # Model overreach: providing conclusions without being asked
+    UNSOLICITED_CONCLUSION_PATTERNS = [
+        (r"(?:(?:I|my) (?:recommendation|suggestion|advice|assessment|verdict|conclusion) (?:is|would be))",
+         "Model provides unsolicited recommendation"),
+        (r"(?:(?:you should|I would suggest|I'?d recommend|the best (?:approach|option|way)))",
+         "Model prescribes action without being asked"),
+        (r"(?:(?:in my (?:opinion|view|assessment|analysis)),?\s+(?:you|the|this|it))",
+         "Model offers unsolicited opinion/assessment"),
+        (r"(?:(?:the (?:answer|solution|fix|resolution) (?:is|here|would be)))",
+         "Model jumps to solution before problem is fully scoped"),
+    ]
+    
+    # Check if user asked for the model's opinion/recommendation
+    SOLICITED_PATTERNS = [
+        r"(?:what (?:do you|would you) (?:think|suggest|recommend|advise))",
+        r"(?:(?:give|provide|share) (?:me |us )?(?:your|a) (?:recommendation|suggestion|opinion|assessment|analysis))",
+        r"(?:(?:what'?s|what is) (?:your|the best) (?:take|view|opinion|recommendation))",
+        r"(?:(?:should I|should we|do you think I should))",
+        r"(?:(?:analyze|evaluate|assess|review) (?:this|it|the))",
+    ]
+    
+    for i, turn in enumerate(turns):
+        if turn["role"] != "assistant":
+            continue
+        
+        # Check if any prior user turn solicited this
+        was_solicited = False
+        for k in range(max(0, i - 2), i):
+            if turns[k]["role"] == "user":
+                if any(re.search(p, turns[k]["content"], re.IGNORECASE) for p in SOLICITED_PATTERNS):
+                    was_solicited = True
+                    break
+        
+        if was_solicited:
+            continue
+        
+        response = turn["content"]
+        for pattern, desc in UNSOLICITED_CONCLUSION_PATTERNS:
+            if re.search(pattern, response, re.IGNORECASE):
+                flags.append(DriftFlag(
+                    layer="judge_mode",
+                    turn=turn["turn"],
+                    severity=4,
+                    description=f"Judge Mode violation: {desc}",
+                    instruction_ref=None,
+                    evidence=response[:200],
+                    tag=DriftTag.SHADOW_PATTERN.value,
+                ))
+                break
+    
+    return flags
+
+
+# --- Rumsfeld Classification (Rule 2) ---
+
+def classify_instruction_uncertainty(instructions: list) -> dict:
+    """
+    Classifies instructions by epistemic status using the Rumsfeld Protocol.
+    From the 12 Rules paper:
+    
+    - Known knowns: clear, verifiable instructions
+    - Known unknowns: acknowledged limitations in the instruction set
+    - Unknown unknowns: emergent gaps not anticipated
+    
+    Returns classification counts and flagged instructions.
+    """
+    KNOWN_KNOWN_INDICATORS = [
+        r"(?:always|never|must|shall|will|exactly|specifically|precisely)",
+        r"(?:format|output|use|include|exclude|provide)\s+(?:as|in|with)",
+        r"(?:do not|don'?t|prohibited|forbidden|required)",
+    ]
+    
+    KNOWN_UNKNOWN_INDICATORS = [
+        r"(?:if (?:possible|applicable|relevant|needed|available))",
+        r"(?:(?:try|attempt|aim) to)",
+        r"(?:(?:when|where|wherever) (?:possible|appropriate|applicable))",
+        r"(?:(?:ideally|preferably|optionally))",
+        r"(?:(?:unless|except|other than))",
+    ]
+    
+    classification = {
+        "known_known": [],
+        "known_unknown": [],
+        "unclassified": [],
+    }
+    
+    for inst in instructions:
+        text = inst.text if hasattr(inst, 'text') else str(inst)
+        text_lower = text.lower()
+        
+        is_known = any(re.search(p, text_lower) for p in KNOWN_KNOWN_INDICATORS)
+        is_uncertain = any(re.search(p, text_lower) for p in KNOWN_UNKNOWN_INDICATORS)
+        
+        if is_known and not is_uncertain:
+            classification["known_known"].append(text[:80])
+        elif is_uncertain:
+            classification["known_unknown"].append(text[:80])
+        else:
+            classification["unclassified"].append(text[:80])
+    
+    classification["counts"] = {
+        "known_known": len(classification["known_known"]),
+        "known_unknown": len(classification["known_unknown"]),
+        "unclassified": len(classification["unclassified"]),
+    }
+    
+    return classification
+
+
+# ---------------------------------------------------------------------------
 # Conflict Pair Detection (Tag 7)
 # ---------------------------------------------------------------------------
 
@@ -2066,6 +2453,36 @@ def audit_conversation(
     # 6f: Pre-drift signal detection
     report.pre_drift_signals = detect_pre_drift_signals(turns)
 
+    # --- 12-RULES DETECTION METHODS ---
+
+    # Criteria Lock (Rule 1 derivative)
+    criteria_lock_flags = detect_criteria_lock(turns)
+    for f in criteria_lock_flags:
+        report.omission_flags.append(f)
+
+    # Task Wall (Chapter 2 derivative)
+    task_wall_flags = detect_task_wall_violations(turns)
+    for f in task_wall_flags:
+        report.omission_flags.append(f)
+
+    # Bootloader Check
+    bootloader_flags = detect_missing_bootloader(turns, system_prompt, user_preferences)
+    for f in bootloader_flags:
+        report.omission_flags.append(f)
+
+    # Structured Disobedience (Chapter 2 derivative)
+    disobedience_flags = detect_fabrication_from_conflict(turns)
+    for f in disobedience_flags:
+        report.commission_flags.append(f)
+
+    # Judge Mode Violation (Rule 3 derivative)
+    judge_mode_flags = detect_judge_mode_violations(turns)
+    for f in judge_mode_flags:
+        report.commission_flags.append(f)
+
+    # Rumsfeld Classification (Rule 2)
+    rumsfeld = classify_instruction_uncertainty(instructions)
+
     # Instruction lifecycle tracking
     report.instruction_lifecycles = build_instruction_lifecycles(
         turns, instructions, len(turns)
@@ -2103,8 +2520,11 @@ def audit_conversation(
             "layers": ["commission", "omission", "correction_persistence", "barometer",
                         "contrastive", "void", "undeclared_unresolved",
                         "false_equivalence", "pre_drift", "conflict_pair",
-                        "shadow_pattern", "op_move"],
-        }
+                        "shadow_pattern", "op_move", "criteria_lock",
+                        "task_wall", "bootloader", "structured_disobedience",
+                        "judge_mode", "rumsfeld"],
+        },
+        "rumsfeld_classification": rumsfeld,
     }
     
     return report
