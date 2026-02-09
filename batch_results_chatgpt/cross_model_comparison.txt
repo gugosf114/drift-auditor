@@ -1,0 +1,25 @@
+======================================================================
+CROSS-MODEL DRIFT COMPARISON: Claude vs ChatGPT
+Generated: 2026-02-08T21:36:46.438685
+======================================================================
+
+Metric                                    Claude      ChatGPT
+------------------------------------------------------------
+Conversations analyzed                       187          325
+Total messages                             20407        17129
+Average drift score                          2.9          3.0
+Total drift flags                           5091         4289
+Flags per message                          0.249        0.250
+Correction events                            741          101
+Corrections failed                            10            0
+Correction failure rate                     1.3%         0.0%
+Void events                                  924          844
+Voids per message                          0.045        0.049
+
+SCORE DISTRIBUTION COMPARISON
+------------------------------------------------------------
+  Clean        (1-2):  Claude  47.6%  |  ChatGPT  50.2%
+  Low Drift    (3-4):  Claude  39.0%  |  ChatGPT  34.5%
+  Moderate     (5-6):  Claude  13.4%  |  ChatGPT  14.8%
+  Elevated     (7-8):  Claude   0.0%  |  ChatGPT   0.6%
+  Severe       (9-10):  Claude   0.0%  |  ChatGPT   0.0%

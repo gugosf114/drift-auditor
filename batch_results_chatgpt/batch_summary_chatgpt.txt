@@ -1,0 +1,92 @@
+======================================================================
+BATCH DRIFT AUDIT SUMMARY — ChatGPT
+Generated: 2026-02-08T21:36:46.432468
+======================================================================
+
+Total conversations analyzed: 325
+Total skipped (< 10 msgs): 430
+Errors: 0
+
+AGGREGATE STATISTICS
+----------------------------------------
+  Total messages processed: 17129
+  Average drift score: 3.0/10
+  Total drift flags: 4289
+  Total correction events: 101
+  Total corrections failed: 0
+  Correction failure rate: 0.0%
+  Total void events: 844
+  Total operator moves: 855
+
+SCORE DISTRIBUTION
+----------------------------------------
+  Clean        (1-2): 163 ( 50.2%) #########################
+  Low Drift    (3-4): 112 ( 34.5%) #################
+  Moderate     (5-6):  48 ( 14.8%) #######
+  Elevated     (7-8):   2 (  0.6%) 
+  Severe       (9-10):   0 (  0.0%) 
+
+TOP 20 HIGHEST DRIFT CONVERSATIONS
+----------------------------------------
+  [ 7/10] [gpt-5-1] Annual salary conversion
+         msgs:44 flags:26 corr_fail:0/0 voids:19 ops:8
+  [ 7/10] [gpt-5-1] AI model setup guide
+         msgs:15 flags:6 corr_fail:0/0 voids:4 ops:3
+  [ 6/10] [gpt-5-2-thinking] Fermi Game Question 1
+         msgs:26 flags:6 corr_fail:0/1 voids:6 ops:1
+  [ 6/10] [gpt-5-1-instant] GDrive upload instructions
+         msgs:20 flags:12 corr_fail:0/0 voids:12 ops:3
+  [ 6/10] [gpt-5-1] Ledger audit improvement
+         msgs:10 flags:2 corr_fail:0/0 voids:3 ops:2
+  [ 6/10] [gpt-5-1] Chapter One Downfalls
+         msgs:76 flags:55 corr_fail:0/1 voids:15 ops:8
+  [ 6/10] [gpt-5-1] Academic integrity check
+         msgs:23 flags:6 corr_fail:0/0 voids:4 ops:2
+  [ 6/10] [gpt-5-1] NJ Sourcing Tax Memo
+         msgs:17 flags:4 corr_fail:0/0 voids:8 ops:8
+  [ 6/10] [gpt-5-1] API settings for stability
+         msgs:20 flags:10 corr_fail:0/0 voids:4 ops:6
+  [ 6/10] [gpt-5-1] Chat review and analysis
+         msgs:23 flags:10 corr_fail:0/2 voids:3 ops:1
+  [ 6/10] [gpt-5-1] Unified house rule summary
+         msgs:17 flags:15 corr_fail:0/0 voids:6 ops:3
+  [ 6/10] [gpt-4o] Zelle with Chime Alternatives
+         msgs:99 flags:53 corr_fail:0/2 voids:31 ops:8
+  [ 6/10] [gpt-5] Response style setup
+         msgs:114 flags:144 corr_fail:0/0 voids:34 ops:25
+  [ 6/10] [gpt-4o] What is CID
+         msgs:34 flags:24 corr_fail:0/0 voids:6 ops:2
+  [ 6/10] [gpt-4o] Custom Cake Retirement Order
+         msgs:12 flags:7 corr_fail:0/0 voids:1 ops:1
+  [ 6/10] [gpt-4o] Debit Card Verification Issues
+         msgs:15 flags:7 corr_fail:0/0 voids:3 ops:0
+  [ 6/10] [gpt-4o] Funko Pop! Release Info
+         msgs:12 flags:6 corr_fail:0/0 voids:1 ops:0
+  [ 6/10] [gpt-4o] Reviewing Residency Questions
+         msgs:14 flags:4 corr_fail:0/0 voids:4 ops:3
+  [ 5/10] [gpt-5] HQ 2
+         msgs:312 flags:162 corr_fail:0/0 voids:21 ops:6
+  [ 5/10] [gpt-5-2] Google AI vs Regular AI
+         msgs:17 flags:4 corr_fail:0/0 voids:3 ops:2
+
+CONVERSATIONS WITH FAILED CORRECTIONS (0)
+----------------------------------------
+
+MODEL DISTRIBUTION
+----------------------------------------
+  gpt-4o: 168 conversations, avg drift 2.7/10
+  gpt-5-1: 67 conversations, avg drift 3.4/10
+  gpt-5: 53 conversations, avg drift 3.2/10
+  gpt-5-2: 13 conversations, avg drift 2.9/10
+  gpt-5-1-thinking: 5 conversations, avg drift 3.8/10
+  gpt-5-2-thinking: 4 conversations, avg drift 4.2/10
+  auto: 3 conversations, avg drift 3.0/10
+  o1-mini: 3 conversations, avg drift 2.7/10
+  gpt-5-1-instant: 2 conversations, avg drift 5.0/10
+  gpt-5-t-mini: 1 conversations, avg drift 4.0/10
+  gpt-5-thinking: 1 conversations, avg drift 4.0/10
+  o3-mini-high: 1 conversations, avg drift 4.0/10
+  o1: 1 conversations, avg drift 4.0/10
+  gpt-4-5: 1 conversations, avg drift 2.0/10
+  gpt-5-mini: 1 conversations, avg drift 1.0/10
+  gpt-4o-jawbone: 1 conversations, avg drift 1.0/10
