@@ -5,6 +5,7 @@ Interactive multi-turn drift analysis for Claude conversations.
 import sys
 import os
 import json
+import glob as glob_mod
 from collections import defaultdict
 
 # Make src/ importable from repo root
@@ -893,10 +894,12 @@ elif analysis_mode == "\U0001f4ca Regression":
         st.stop()
 
     df = pd.DataFrame(batch_data)
-    df["total_flags"] = df.get("commission_flags", 0) + df.get("omission_flags", 0)
-    df["correction_fail_rate"] = df.apply(
-        lambda r: r.get("corrections_failed", 0) / max(r.get("corrections_total", 1), 1), axis=1
-    )
+    df["commission_flags"] = df["commission_flags"].fillna(0).astype(int)
+    df["omission_flags"] = df["omission_flags"].fillna(0).astype(int)
+    df["corrections_failed"] = df.get("corrections_failed", pd.Series(0, index=df.index)).fillna(0).astype(int)
+    df["corrections_total"] = df.get("corrections_total", pd.Series(0, index=df.index)).fillna(0).astype(int)
+    df["total_flags"] = df["commission_flags"] + df["omission_flags"]
+    df["correction_fail_rate"] = df["corrections_failed"] / df["corrections_total"].clip(lower=1)
 
     st.success(f"Loaded **{len(df)} conversations** across **{df['model'].nunique()} models**: "
                f"{', '.join(df['model'].unique())}")
@@ -1662,8 +1665,6 @@ else:
     st.subheader("Cross-Model Drift Leaderboard")
 
     # Load batch results if available
-    import glob as glob_mod
-
     leaderboard_data = []
     for batch_dir in ["batch_results", "batch_results_chatgpt"]:
         batch_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), batch_dir)
