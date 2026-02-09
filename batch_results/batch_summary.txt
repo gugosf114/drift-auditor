@@ -1,0 +1,93 @@
+======================================================================
+BATCH DRIFT AUDIT SUMMARY
+Generated: 2026-02-08T20:54:27.532873
+======================================================================
+
+Total conversations analyzed: 187
+Total conversations skipped (< 10 msgs): 102
+Errors: 0
+
+AGGREGATE STATISTICS
+----------------------------------------
+  Total messages processed: 20407
+  Average drift score: 2.9/10
+  Total drift flags: 5091
+  Total correction events: 741
+  Total corrections failed: 10
+  Correction failure rate: 1.3%
+  Total void events: 924
+  Total operator moves: 923
+
+SCORE DISTRIBUTION
+----------------------------------------
+  Clean        (1-2):  89 ( 47.6%) #######################
+  Low Drift    (3-4):  73 ( 39.0%) ###################
+  Moderate     (5-6):  25 ( 13.4%) ######
+  Elevated     (7-8):   0 (  0.0%) 
+  Severe       (9-10):   0 (  0.0%) 
+
+TOP 20 HIGHEST DRIFT CONVERSATIONS
+----------------------------------------
+  [ 6/10] Encore Aviation Detailing pitch deck design
+         msgs:44 flags:22 corr_fail:0/2 voids:7 ops:0
+  [ 6/10] Understanding operator engagement style through co
+         msgs:32 flags:8 corr_fail:0/3 voids:5 ops:11
+  [ 6/10] Activating file system MCP server via JSON configu
+         msgs:12 flags:5 corr_fail:0/1 voids:2 ops:0
+  [ 5/10] Coin limit status check
+         msgs:132 flags:41 corr_fail:0/7 voids:11 ops:8
+  [ 5/10] Verifying AI deliverables beyond flattery
+         msgs:287 flags:212 corr_fail:1/11 voids:16 ops:32
+  [ 5/10] Resuming previous session status
+         msgs:610 flags:1437 corr_fail:0/18 voids:52 ops:60
+  [ 5/10] Square Banking payment hold resolution
+         msgs:13 flags:2 corr_fail:0/0 voids:2 ops:0
+  [ 5/10] LinkedIn profile link
+         msgs:24 flags:4 corr_fail:0/0 voids:5 ops:2
+  [ 5/10] Illustrating key points for our future
+         msgs:10 flags:2 corr_fail:0/2 voids:2 ops:0
+  [ 5/10] Opus vs Sonnet for testing
+         msgs:24 flags:5 corr_fail:0/1 voids:3 ops:1
+  [ 5/10] General greeting
+         msgs:76 flags:39 corr_fail:1/5 voids:5 ops:5
+  [ 5/10] Levon's website projects: daycare and flooring
+         msgs:78 flags:31 corr_fail:0/1 voids:9 ops:2
+  [ 5/10] Retrieving JSON configuration from previous chats
+         msgs:118 flags:78 corr_fail:0/2 voids:16 ops:5
+  [ 5/10] Morning check-in
+         msgs:84 flags:105 corr_fail:0/3 voids:11 ops:0
+  [ 5/10] Code review for Claude
+         msgs:96 flags:70 corr_fail:0/2 voids:11 ops:9
+  [ 5/10] Updating Microsoft logo for website pages
+         msgs:42 flags:10 corr_fail:0/1 voids:3 ops:1
+  [ 5/10] Website logo troubleshooting and MCP workflow plan
+         msgs:24 flags:6 corr_fail:0/1 voids:3 ops:2
+  [ 5/10] Google workspace server connection fix
+         msgs:223 flags:59 corr_fail:0/3 voids:19 ops:13
+  [ 5/10] Reducing friction with AI tool usage
+         msgs:12 flags:6 corr_fail:0/3 voids:2 ops:0
+  [ 5/10] ChatGPT Plus vs Business subscription differences
+         msgs:14 flags:3 corr_fail:0/2 voids:3 ops:1
+
+CONVERSATIONS WITH FAILED CORRECTIONS (7)
+----------------------------------------
+  3/27 failed: NotebookLM and AI drift research limitations
+  2/18 failed: File access request misunderstanding
+  1/11 failed: Verifying AI deliverables beyond flattery
+  1/5 failed: General greeting
+  1/17 failed: Revising project materials across LinkedIn and Git
+  1/22 failed: Cross-chat memory capabilities
+  1/12 failed: Claude Code Chrome extension for web development
+
+MOST OPERATOR INTERVENTION (129 conversations)
+----------------------------------------
+  60 moves (5 effective): Resuming previous session status
+  59 moves (5 effective): NotebookLM and AI drift research limitations
+  39 moves (7 effective): Privacy and confidentiality concerns
+  37 moves (7 effective): Creative drought and accidental breakthroughs
+  35 moves (3 effective): Cross-chat memory capabilities
+  32 moves (5 effective): Verifying AI deliverables beyond flattery
+  27 moves (4 effective): Revising project materials across LinkedIn and Git
+  23 moves (2 effective): Reviewing complete chat history
+  23 moves (2 effective): Portfolio review session
+  18 moves (1 effective): Read all, please
