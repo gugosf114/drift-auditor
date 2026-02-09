@@ -19,6 +19,13 @@ from drift_auditor import (
     DriftFlag,
     CorrectionEvent,
     BarometerSignal,
+    InstructionLifecycle,
+    ConflictPair,
+    ShadowPattern,
+    OpMove,
+    VoidEvent,
+    DriftTag,
+    OperatorRule,
     format_report,
     report_to_json,
 )
@@ -38,93 +45,195 @@ st.set_page_config(
 # ---------------------------------------------------------------------------
 st.markdown("""
 <style>
-/* --- Base theme overrides --- */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+/* --- Base theme: warm dark with amber accents (Bakers Agent palette) --- */
 .stApp {
-    background: linear-gradient(135deg, #0a0a1a 0%, #121228 50%, #0d0d20 100%);
+    background: #0a0807;
+    font-family: 'DM Sans', sans-serif;
+    color: #e8dfd0;
 }
 
-/* Glass card */
+/* Glass card — warm dark */
 .glass-card {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
+    background: #12100f;
+    border: 1px solid #2a2623;
+    border-radius: 4px;
     padding: 20px;
     margin-bottom: 8px;
 }
 
 .glass-card-hero {
-    background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
+    background: #12100f;
+    border: 1px solid #3a3530;
+    border-radius: 4px;
     padding: 28px 20px;
     text-align: center;
+    box-shadow: 0 0 30px rgba(245, 158, 11, 0.08);
 }
 
 .metric-value {
     font-size: 2.8rem;
-    font-weight: 800;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
     line-height: 1.1;
     text-align: center;
 }
 
 .metric-value-hero {
     font-size: 4rem;
-    font-weight: 800;
+    font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
     line-height: 1.1;
     text-align: center;
 }
 
 .metric-label {
-    font-size: 0.78rem;
+    font-size: 0.72rem;
+    font-family: 'JetBrains Mono', monospace;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 2.5px;
+    color: #8b7d6b;
     text-align: center;
     margin-bottom: 6px;
 }
 
 .metric-sub {
-    font-size: 0.8rem;
-    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.78rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: #8b7d6b;
     text-align: center;
     margin-top: 4px;
 }
 
 .status-held {
-    color: #00d4ff;
+    color: #22c55e;
     font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 .status-failed {
-    color: #ff3366;
+    color: #ef4444;
     font-weight: 700;
+    font-family: 'JetBrains Mono', monospace;
 }
 
 .event-card {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 12px;
+    background: #12100f;
+    border: 1px solid #2a2623;
+    border-radius: 4px;
     padding: 16px;
     margin-bottom: 10px;
 }
 
-/* Sidebar tweaks */
+/* Sidebar — warm dark */
 section[data-testid="stSidebar"] {
-    background: rgba(10, 10, 30, 0.95);
+    background: #0a0807;
+    border-right: 1px solid #2a2623;
 }
 
 /* Tab styling */
 .stTabs [data-baseweb="tab-list"] {
-    gap: 8px;
+    gap: 4px;
+    border-bottom: 1px solid #2a2623;
 }
 
 .stTabs [data-baseweb="tab"] {
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 8px;
+    background: transparent;
+    border-radius: 4px 4px 0 0;
     padding: 8px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #8b7d6b;
+}
+
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    background: #12100f;
+    color: #f59e0b;
+    border-bottom: 2px solid #f59e0b;
+}
+
+/* Headers */
+h1, h2, h3 {
+    font-family: 'JetBrains Mono', monospace;
+    color: #e8dfd0;
+}
+
+/* Expander styling */
+.streamlit-expanderHeader {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: #c4b8a3;
+}
+
+/* Metric overrides */
+[data-testid="stMetricValue"] {
+    font-family: 'JetBrains Mono', monospace;
+    color: #f59e0b;
+}
+
+[data-testid="stMetricLabel"] {
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #8b7d6b;
+}
+
+/* Button styling */
+.stButton > button {
+    background: #12100f;
+    border: 1px solid #2a2623;
+    color: #e8dfd0;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.78rem;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.stButton > button:hover {
+    border-color: #f59e0b;
+    color: #f59e0b;
+    box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
+}
+
+/* Download button */
+.stDownloadButton > button {
+    background: #12100f;
+    border: 1px solid #f59e0b;
+    color: #f59e0b;
+    font-family: 'JetBrains Mono', monospace;
+    border-radius: 4px;
+}
+
+/* Text area / inputs */
+.stTextArea textarea, .stTextInput input {
+    background: #12100f;
+    border: 1px solid #2a2623;
+    color: #e8dfd0;
+    font-family: 'DM Sans', sans-serif;
+    border-radius: 4px;
+}
+
+/* File uploader */
+[data-testid="stFileUploader"] {
+    border: 1px dashed #2a2623;
+    border-radius: 4px;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #0a0807; }
+::-webkit-scrollbar-thumb { background: #2a2623; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+
+/* Info/Success/Warning/Error boxes */
+.stAlert {
+    border-radius: 4px;
+    font-family: 'DM Sans', sans-serif;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -134,15 +243,15 @@ section[data-testid="stSidebar"] {
 # ---------------------------------------------------------------------------
 
 def score_color(score: int) -> str:
-    """Map a 1-10 severity score to a hex color."""
+    """Map a 1-10 severity score to a hex color (warm palette)."""
     if score <= 3:
-        return "#00d4ff"
+        return "#22c55e"   # green — clean
     elif score <= 5:
-        return "#ffb300"
+        return "#f59e0b"   # amber — moderate
     elif score <= 7:
-        return "#ff6b35"
+        return "#ef4444"   # red — elevated
     else:
-        return "#ff3366"
+        return "#dc2626"   # deep red — severe
 
 
 def score_label(score: int) -> str:
@@ -162,7 +271,7 @@ def score_label(score: int) -> str:
 PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="rgba(255,255,255,0.8)", family="Inter, sans-serif", size=12),
+    font=dict(color="#c4b8a3", family="JetBrains Mono, DM Sans, sans-serif", size=12),
     margin=dict(l=50, r=30, t=40, b=40),
 )
 
@@ -172,7 +281,7 @@ def render_metric_card(label: str, score: int, subtitle: str, hero: bool = False
     color = score_color(score)
     card_cls = "glass-card-hero" if hero else "glass-card"
     val_cls = "metric-value-hero" if hero else "metric-value"
-    shadow = f"0 0 30px {color}40" if hero else "none"
+    shadow = f"0 0 20px {color}25" if hero else "none"
     st.markdown(f"""
     <div class="{card_cls}" style="box-shadow: {shadow}">
         <div class="metric-label">{label}</div>
@@ -193,7 +302,7 @@ def build_timeline_fig(report: AuditReport) -> go.Figure:
             y=[f.severity for f in report.commission_flags],
             mode="markers",
             name="Commission",
-            marker=dict(size=11, color="#ff3366", symbol="diamond", line=dict(width=1, color="#ff336680")),
+            marker=dict(size=11, color="#ef4444", symbol="diamond", line=dict(width=1, color="#ef444480")),
             hovertext=[f"T{f.turn}: {f.description[:60]}" for f in report.commission_flags],
             hoverinfo="text",
         ))
@@ -205,7 +314,7 @@ def build_timeline_fig(report: AuditReport) -> go.Figure:
             y=[f.severity for f in report.omission_flags],
             mode="markers",
             name="Omission",
-            marker=dict(size=11, color="#ffb300", symbol="triangle-up", line=dict(width=1, color="#ffb30080")),
+            marker=dict(size=11, color="#f59e0b", symbol="triangle-up", line=dict(width=1, color="#f59e0b80")),
             hovertext=[f"T{f.turn}: {f.description[:60]}" for f in report.omission_flags],
             hoverinfo="text",
         ))
@@ -231,7 +340,7 @@ def build_timeline_fig(report: AuditReport) -> go.Figure:
             y=[s.severity for s in red_signals],
             mode="markers",
             name="Barometer RED",
-            marker=dict(size=9, color="#ff3366", symbol="circle", opacity=0.4),
+            marker=dict(size=9, color="#ef4444", symbol="circle", opacity=0.4),
             hovertext=[f"T{s.turn}: {s.description[:60]}" for s in red_signals],
             hoverinfo="text",
         ))
@@ -239,8 +348,8 @@ def build_timeline_fig(report: AuditReport) -> go.Figure:
     fig.update_layout(
         **PLOTLY_LAYOUT,
         height=380,
-        xaxis=dict(title="Turn", gridcolor="rgba(255,255,255,0.06)", zeroline=False),
-        yaxis=dict(title="Severity", range=[0, 11], gridcolor="rgba(255,255,255,0.06)", zeroline=False),
+        xaxis=dict(title="Turn", gridcolor="#2a2623", zeroline=False),
+        yaxis=dict(title="Severity", range=[0, 11], gridcolor="#2a2623", zeroline=False),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                     bgcolor="rgba(0,0,0,0)", font=dict(size=11)),
         hovermode="closest",
@@ -254,14 +363,14 @@ def build_barometer_strip(report: AuditReport) -> go.Figure:
         return go.Figure()
 
     cls_map = {"GREEN": 0, "YELLOW": 0.5, "RED": 1.0}
-    colors = {"GREEN": "#00d4ff", "YELLOW": "#ffb300", "RED": "#ff3366"}
+    colors = {"GREEN": "#22c55e", "YELLOW": "#f59e0b", "RED": "#ef4444"}
 
     fig = go.Figure()
     for s in report.barometer_signals:
         fig.add_trace(go.Bar(
             x=[1], y=["Epistemic Posture"],
             orientation="h",
-            marker_color=colors.get(s.classification, "#ffb300"),
+            marker_color=colors.get(s.classification, "#f59e0b"),
             hovertext=f"T{s.turn}: {s.classification} — {s.description[:50]}",
             hoverinfo="text",
             showlegend=False,
@@ -283,7 +392,7 @@ def build_barometer_detail(report: AuditReport) -> go.Figure:
     if not report.barometer_signals:
         return go.Figure()
 
-    colors = {"GREEN": "#00d4ff", "YELLOW": "#ffb300", "RED": "#ff3366"}
+    colors = {"GREEN": "#22c55e", "YELLOW": "#f59e0b", "RED": "#ef4444"}
     fig = go.Figure()
 
     for cls in ["GREEN", "YELLOW", "RED"]:
@@ -326,7 +435,7 @@ def build_persistence_fig(report: AuditReport) -> go.Figure:
             x=[event.correction_turn], y=[y_pos],
             mode="markers+text", text=["Correction"],
             textposition="top center", textfont=dict(size=10, color="rgba(255,255,255,0.6)"),
-            marker=dict(size=14, color="#ff6b35", symbol="circle"),
+            marker=dict(size=14, color="#d68910", symbol="circle"),
             showlegend=False, hoverinfo="text",
             hovertext=f"User corrected at T{event.correction_turn}",
         ))
@@ -336,7 +445,7 @@ def build_persistence_fig(report: AuditReport) -> go.Figure:
             x=[event.acknowledgment_turn], y=[y_pos],
             mode="markers+text", text=["Ack"],
             textposition="top center", textfont=dict(size=10, color="rgba(255,255,255,0.6)"),
-            marker=dict(size=14, color="#00d4ff", symbol="circle"),
+            marker=dict(size=14, color="#22c55e", symbol="circle"),
             showlegend=False, hoverinfo="text",
             hovertext=f"Model acknowledged at T{event.acknowledgment_turn}",
         ))
@@ -355,8 +464,8 @@ def build_persistence_fig(report: AuditReport) -> go.Figure:
             fig.add_trace(go.Scatter(
                 x=[event.failure_turn], y=[y_pos],
                 mode="markers+text", text=["Failed"],
-                textposition="top center", textfont=dict(size=10, color="#ff3366"),
-                marker=dict(size=16, color="#ff3366", symbol="x"),
+                textposition="top center", textfont=dict(size=10, color="#ef4444"),
+                marker=dict(size=16, color="#ef4444", symbol="x"),
                 showlegend=False, hoverinfo="text",
                 hovertext=f"Correction failed at T{event.failure_turn}",
             ))
@@ -364,7 +473,7 @@ def build_persistence_fig(report: AuditReport) -> go.Figure:
                 x=[event.acknowledgment_turn, event.failure_turn],
                 y=[y_pos, y_pos],
                 mode="lines",
-                line=dict(color="#ff3366", width=2, dash="dash"),
+                line=dict(color="#ef4444", width=2, dash="dash"),
                 showlegend=False, hoverinfo="skip",
             ))
         else:
@@ -372,8 +481,8 @@ def build_persistence_fig(report: AuditReport) -> go.Figure:
             fig.add_trace(go.Scatter(
                 x=[event.acknowledgment_turn + 2], y=[y_pos],
                 mode="markers+text", text=["Held \u2713"],
-                textposition="middle right", textfont=dict(size=11, color="#00d4ff"),
-                marker=dict(size=12, color="#00d4ff", symbol="circle"),
+                textposition="middle right", textfont=dict(size=11, color="#22c55e"),
+                marker=dict(size=12, color="#22c55e", symbol="circle"),
                 showlegend=False, hoverinfo="text",
                 hovertext="Correction held across subsequent turns",
             ))
@@ -420,8 +529,8 @@ def build_omission_fig(report: AuditReport) -> go.Figure:
         x=[f.turn for f in flags],
         y=[f.severity for f in flags],
         mode="lines+markers",
-        line=dict(color="#ffb300", width=2),
-        marker=dict(size=8, color="#ffb300"),
+        line=dict(color="#f59e0b", width=2),
+        marker=dict(size=8, color="#f59e0b"),
         hovertext=[f"T{f.turn}: {f.description[:60]}" for f in flags],
         hoverinfo="text",
     ))
@@ -587,13 +696,32 @@ for col, (label, key, subtitle_fn) in zip([c1, c2, c3, c4], LAYER_METRICS):
     with col:
         render_metric_card(label, scores.get(key, 1), subtitle_fn(scores))
 
+# Structural score row
+st.markdown("")
+struct_col, void_col, conflict_col, shadow_col, op_col = st.columns(5)
+with struct_col:
+    render_metric_card("Structural", scores.get("structural_score", 1),
+                       f"composite of new detectors")
+with void_col:
+    st.metric("Void Events", scores.get("void_events_count", 0))
+with conflict_col:
+    st.metric("Conflict Pairs", scores.get("conflict_pairs_count", 0))
+with shadow_col:
+    st.metric("Shadow Patterns", scores.get("shadow_patterns_count", 0))
+with op_col:
+    effective = scores.get("op_moves_effective", 0)
+    total_moves = scores.get("op_moves_total", 0)
+    st.metric("Operator Moves", f"{effective}/{total_moves} effective")
+
 # Stats row
 st.markdown("")
-s1, s2, s3, s4 = st.columns(4)
+s1, s2, s3, s4, s5, s6 = st.columns(6)
 s1.metric("Total Turns", report.total_turns)
-s2.metric("Instructions Extracted", report.instructions_extracted)
+s2.metric("Instructions", report.instructions_extracted)
 s3.metric("Total Flags", scores.get("commission_flag_count", 0) + scores.get("omission_flag_count", 0))
-s4.metric("Corrections Tracked", scores.get("correction_events_total", 0))
+s4.metric("Corrections", scores.get("correction_events_total", 0))
+s5.metric("Instrs Active", scores.get("instructions_active", 0))
+s6.metric("Instrs Dropped", scores.get("instructions_omitted", 0))
 
 
 # ---------------------------------------------------------------------------
@@ -617,9 +745,132 @@ if report.barometer_signals:
 # Detail Tabs
 # ---------------------------------------------------------------------------
 
-tab_baro, tab_persist, tab_comm, tab_omit = st.tabs(
-    ["\U0001f9e0 Barometer", "\U0001f504 Persistence", "\U0001f6a9 Commission", "\U0001f4dc Omission"]
+tab_lifecycle, tab_baro, tab_persist, tab_comm, tab_omit, tab_struct, tab_operator = st.tabs(
+    ["\U0001f4cb Lifecycle", "\U0001f9e0 Barometer", "\U0001f504 Persistence",
+     "\U0001f6a9 Commission", "\U0001f4dc Omission",
+     "\U0001f50d Structural", "\U0001f3af Operator"]
 )
+
+# --- Lifecycle Tab ---
+with tab_lifecycle:
+    st.caption("Per-instruction tracking: when given, when followed, when dropped, coupling score.")
+
+    if report.instruction_lifecycles:
+        # Build lifecycle timeline visualization
+        lc_fig = go.Figure()
+
+        statuses = {"active": "#22c55e", "omitted": "#ef4444", "degraded": "#f59e0b", "superseded": "#666"}
+
+        for i, lc in enumerate(report.instruction_lifecycles):
+            y_pos = len(report.instruction_lifecycles) - i
+            color = statuses.get(lc.status, "#888")
+            label = lc.instruction_text[:40] + ("..." if len(lc.instruction_text) > 40 else "")
+
+            # Given point
+            lc_fig.add_trace(go.Scatter(
+                x=[lc.turn_given], y=[y_pos],
+                mode="markers", marker=dict(size=12, color="#22c55e", symbol="circle"),
+                showlegend=False, hoverinfo="text",
+                hovertext=f"Given at T{lc.turn_given}: {lc.instruction_text[:60]}",
+            ))
+
+            # Last followed (if exists)
+            if lc.turn_last_followed is not None:
+                lc_fig.add_trace(go.Scatter(
+                    x=[lc.turn_last_followed], y=[y_pos],
+                    mode="markers", marker=dict(size=12, color="#22c55e", symbol="diamond"),
+                    showlegend=False, hoverinfo="text",
+                    hovertext=f"Last followed at T{lc.turn_last_followed}",
+                ))
+                lc_fig.add_trace(go.Scatter(
+                    x=[lc.turn_given, lc.turn_last_followed], y=[y_pos, y_pos],
+                    mode="lines", line=dict(color="#22c55e", width=3),
+                    showlegend=False, hoverinfo="skip",
+                ))
+
+            # First omitted (if exists)
+            if lc.turn_first_omitted is not None:
+                lc_fig.add_trace(go.Scatter(
+                    x=[lc.turn_first_omitted], y=[y_pos],
+                    mode="markers", marker=dict(size=14, color="#ef4444", symbol="x"),
+                    showlegend=False, hoverinfo="text",
+                    hovertext=f"First omitted at T{lc.turn_first_omitted}",
+                ))
+                end_point = lc.turn_last_followed if lc.turn_last_followed else lc.turn_given
+                lc_fig.add_trace(go.Scatter(
+                    x=[end_point, lc.turn_first_omitted], y=[y_pos, y_pos],
+                    mode="lines", line=dict(color="#ef4444", width=2, dash="dash"),
+                    showlegend=False, hoverinfo="skip",
+                ))
+
+            # Label
+            lc_fig.add_annotation(
+                x=-0.5, y=y_pos, text=label, showarrow=False,
+                xanchor="right", font=dict(size=10, color=color),
+            )
+
+        lc_fig.update_layout(
+            **PLOTLY_LAYOUT,
+            height=max(300, len(report.instruction_lifecycles) * 55 + 80),
+            xaxis=dict(title="Turn", gridcolor="rgba(255,255,255,0.06)", zeroline=False),
+            yaxis=dict(visible=False),
+            margin=dict(l=250, r=30, t=40, b=40),
+        )
+        st.plotly_chart(lc_fig, use_container_width=True, config={"displaylogo": False})
+
+        # Lifecycle detail cards
+        st.markdown("**Instruction Details**")
+        for lc in report.instruction_lifecycles:
+            status_colors = {"active": "#22c55e", "omitted": "#ef4444",
+                             "degraded": "#f59e0b", "superseded": "#666"}
+            sc = status_colors.get(lc.status, "#888")
+            st.markdown(f"""
+            <div class="event-card" style="border-left: 3px solid {sc}">
+                <span style="color: {sc}; font-weight: 700">{lc.status.upper()}</span>
+                <span style="color: rgba(255,255,255,0.5); margin-left: 8px">
+                    coupling: {lc.coupling_score:.2f} | {lc.position_in_conversation} | {lc.source}
+                </span>
+                <br><span style="color: rgba(255,255,255,0.8)">{lc.instruction_text[:120]}</span>
+                <br><small style="color: rgba(255,255,255,0.4)">
+                    Given T{lc.turn_given}
+                    {'&rarr; Last followed T' + str(lc.turn_last_followed) if lc.turn_last_followed is not None else ''}
+                    {'&rarr; <span style="color:#ef4444">Omitted T' + str(lc.turn_first_omitted) + '</span>' if lc.turn_first_omitted is not None else ''}
+                </small>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Positional analysis
+        pa = report.positional_analysis
+        if pa and any(isinstance(v, dict) and v.get("count", 0) > 0
+                      for k, v in pa.items() if k != "hypothesis_supported"):
+            st.markdown("**Edge vs. Middle Positional Analysis**")
+            pos_cols = st.columns(3)
+            for col, pos_name in zip(pos_cols, ["edge_start", "middle", "edge_end"]):
+                with col:
+                    data = pa.get(pos_name, {})
+                    if isinstance(data, dict):
+                        count = data.get("count", 0)
+                        omitted = data.get("omitted", 0)
+                        rate = data.get("rate", 0)
+                        label_map = {"edge_start": "Start (first 20%)",
+                                     "middle": "Middle (20-80%)",
+                                     "edge_end": "End (last 20%)"}
+                        rate_color = "#ef4444" if rate > 0.5 else "#f59e0b" if rate > 0.2 else "#22c55e"
+                        st.markdown(f"""
+                        <div class="glass-card">
+                            <div class="metric-label">{label_map.get(pos_name, pos_name)}</div>
+                            <div class="metric-value" style="color: {rate_color}">{rate:.0%}</div>
+                            <div class="metric-sub">{omitted}/{count} omitted</div>
+                        </div>""", unsafe_allow_html=True)
+
+            hyp = pa.get("hypothesis_supported")
+            if hyp is not None:
+                if hyp:
+                    st.warning("Hypothesis SUPPORTED: Middle instructions are omitted more than edge instructions.")
+                else:
+                    st.success("Hypothesis NOT SUPPORTED: Edge and middle instructions omitted at similar rates.")
+    else:
+        st.info("No instructions extracted to track.")
 
 # --- Barometer Tab ---
 with tab_baro:
@@ -632,23 +883,23 @@ with tab_baro:
     bc1, bc2, bc3 = st.columns(3)
     with bc1:
         st.markdown(f"""
-        <div class="glass-card" style="border-left: 3px solid #ff3366">
+        <div class="glass-card" style="border-left: 3px solid #ef4444">
             <div class="metric-label">RED</div>
-            <div class="metric-value" style="color: #ff3366">{len(red_signals)}</div>
+            <div class="metric-value" style="color: #ef4444">{len(red_signals)}</div>
             <div class="metric-sub">Active structural drift</div>
         </div>""", unsafe_allow_html=True)
     with bc2:
         st.markdown(f"""
-        <div class="glass-card" style="border-left: 3px solid #ffb300">
+        <div class="glass-card" style="border-left: 3px solid #f59e0b">
             <div class="metric-label">YELLOW</div>
-            <div class="metric-value" style="color: #ffb300">{len(yellow_signals)}</div>
+            <div class="metric-value" style="color: #f59e0b">{len(yellow_signals)}</div>
             <div class="metric-sub">Passive drift / hedging</div>
         </div>""", unsafe_allow_html=True)
     with bc3:
         st.markdown(f"""
-        <div class="glass-card" style="border-left: 3px solid #00d4ff">
+        <div class="glass-card" style="border-left: 3px solid #22c55e">
             <div class="metric-label">GREEN</div>
-            <div class="metric-value" style="color: #00d4ff">{len(green_signals)}</div>
+            <div class="metric-value" style="color: #22c55e">{len(green_signals)}</div>
             <div class="metric-sub">Healthy posture</div>
         </div>""", unsafe_allow_html=True)
 
@@ -683,7 +934,7 @@ with tab_persist:
                 status_html = f'<span class="status-failed">FAILED at turn {event.failure_turn}</span>'
 
             st.markdown(f"""
-            <div class="event-card" style="border-left: 3px solid {'#00d4ff' if event.held else '#ff3366'}">
+            <div class="event-card" style="border-left: 3px solid {'#22c55e' if event.held else '#ef4444'}">
                 {status_html}
                 <br><span style="color: rgba(255,255,255,0.6)">
                     Turn {event.correction_turn} \u2192 Ack {event.acknowledgment_turn}
@@ -738,6 +989,176 @@ with tab_omit:
                         config={"displaylogo": False})
     else:
         st.info("No omission drift detected (local heuristics only). Full semantic detection requires API mode.")
+
+
+# --- Structural Tab ---
+with tab_struct:
+    st.caption("Conflict pairs, void events, shadow patterns, pre-drift signals, and false equivalence.")
+
+    # Sub-sections
+    struct_sub1, struct_sub2 = st.columns(2)
+
+    with struct_sub1:
+        # Void Events
+        st.markdown("**Void Events (Causal Chain Breaks)**")
+        if report.void_events:
+            for v in report.void_events:
+                steps = ["Given", "Acknowledged", "Followed", "Persisted"]
+                step_keys = ["given", "acknowledged", "followed", "persisted"]
+                chain_html = ""
+                for step, key in zip(steps, step_keys):
+                    ok = v.chain_status.get(key, False)
+                    color = "#22c55e" if ok else "#ef4444"
+                    icon = "&#10003;" if ok else "&#10007;"
+                    chain_html += f'<span style="color:{color}">{icon} {step}</span> '
+
+                st.markdown(f"""
+                <div class="event-card" style="border-left: 3px solid #ef4444">
+                    <span style="color: rgba(255,255,255,0.8)">{v.instruction_text[:80]}</span>
+                    <br>{chain_html}
+                    <br><small style="color: #ef4444">Void at: {v.void_at}</small>
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.success("No causal chain breaks detected.")
+
+    with struct_sub2:
+        # Conflict Pairs
+        st.markdown("**Conflict Pairs (Contradictions)**")
+        if report.conflict_pairs:
+            for cp in report.conflict_pairs:
+                st.markdown(f"""
+                <div class="event-card" style="border-left: 3px solid #a855f7">
+                    <span style="color: #a855f7; font-weight: 700">T{cp.turn_a} vs T{cp.turn_b}</span>
+                    <span style="color: rgba(255,255,255,0.5)"> | sev {cp.severity} | {cp.topic}</span>
+                    <br><small style="color: rgba(255,255,255,0.6)">A: {cp.statement_a[:100]}</small>
+                    <br><small style="color: rgba(255,255,255,0.6)">B: {cp.statement_b[:100]}</small>
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.success("No contradictions detected.")
+
+    st.markdown("---")
+
+    struct_sub3, struct_sub4 = st.columns(2)
+
+    with struct_sub3:
+        # Shadow Patterns
+        st.markdown("**Shadow Patterns (Unprompted Behavior)**")
+        if report.shadow_patterns:
+            for sp in report.shadow_patterns:
+                st.markdown(f"""
+                <div class="event-card" style="border-left: 3px solid #f59e0b">
+                    <span style="color: #f59e0b; font-weight: 700">{sp.pattern_description}</span>
+                    <br><span style="color: rgba(255,255,255,0.5)">
+                        Seen {sp.frequency}x | sev {sp.severity} | Turns: {sp.turns_observed[:8]}
+                    </span>
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.success("No unprompted recurring behaviors detected.")
+
+    with struct_sub4:
+        # Pre-Drift Signals
+        st.markdown("**Pre-Drift Signals (Early Warning)**")
+        if report.pre_drift_signals:
+            for f in report.pre_drift_signals:
+                st.markdown(f"""
+                <div class="event-card" style="border-left: 3px solid #d68910">
+                    <span style="color: #d68910; font-weight: 700">Turn {f.turn}</span>
+                    <span style="color: rgba(255,255,255,0.5)"> | sev {f.severity}</span>
+                    <br><span style="color: rgba(255,255,255,0.7)">{f.description}</span>
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.success("No pre-drift indicators detected.")
+
+
+# --- Operator Tab ---
+with tab_operator:
+    st.caption("12-Rule Operator System: classifying the human's corrective actions.")
+
+    if report.op_moves:
+        # Rule frequency chart
+        rule_counts = defaultdict(int)
+        rule_effective = defaultdict(int)
+        for m in report.op_moves:
+            rule_counts[m.rule] += 1
+            if m.effectiveness == "effective":
+                rule_effective[m.rule] += 1
+
+        rules_sorted = sorted(rule_counts.items(), key=lambda x: x[1], reverse=True)
+        rule_names = [r for r, _ in rules_sorted]
+        rule_totals = [c for _, c in rules_sorted]
+        rule_eff = [rule_effective.get(r, 0) for r in rule_names]
+
+        rule_fig = go.Figure()
+        rule_fig.add_trace(go.Bar(
+            y=rule_names, x=rule_totals, orientation="h",
+            name="Total", marker_color="rgba(255,255,255,0.15)",
+        ))
+        rule_fig.add_trace(go.Bar(
+            y=rule_names, x=rule_eff, orientation="h",
+            name="Effective", marker_color="#22c55e",
+        ))
+        rule_fig.update_layout(
+            **PLOTLY_LAYOUT,
+            barmode="overlay",
+            height=max(200, len(rule_names) * 40 + 60),
+            xaxis=dict(title="Count", gridcolor="rgba(255,255,255,0.06)"),
+            yaxis=dict(autorange="reversed"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                        bgcolor="rgba(0,0,0,0)"),
+        )
+        st.plotly_chart(rule_fig, use_container_width=True, config={"displaylogo": False})
+
+        # Rule descriptions
+        RULE_DESCRIPTIONS = {
+            "R01_ANCHOR": "Set explicit instruction at start",
+            "R02_ECHO_CHECK": "Ask model to restate instructions",
+            "R03_BOUNDARY": "Enforce scope limits (most violated rule)",
+            "R04_CORRECTION": "Direct error correction",
+            "R05_NOT_SHOT": "Misinterpretation from voice/typo errors",
+            "R06_CONTRASTIVE": "What changed between X and Y?",
+            "R07_RESET": "Start over / full context reset",
+            "R08_DECOMPOSE": "Break complex instruction into steps",
+            "R09_EVIDENCE": "Show me where / proof request",
+            "R10_META_CALL": "Calling out the drift pattern itself",
+            "R11_TIGER_TAMER": "Active reinforcement to fight drift",
+            "R12_KILL_SWITCH": "Abandon thread / hard stop",
+        }
+
+        st.markdown("**Move Details**")
+        for m in report.op_moves:
+            eff_color = {"effective": "#22c55e", "partially_effective": "#f59e0b",
+                         "ineffective": "#ef4444", "unknown": "#666"}.get(m.effectiveness, "#666")
+            rule_desc = RULE_DESCRIPTIONS.get(m.rule, "")
+            st.markdown(f"""
+            <div class="event-card" style="border-left: 3px solid {eff_color}">
+                <span style="color: {eff_color}; font-weight: 700">{m.rule}</span>
+                <span style="color: rgba(255,255,255,0.4)"> | {rule_desc}</span>
+                <br><span style="color: rgba(255,255,255,0.5)">
+                    Turn {m.turn} | {m.effectiveness}
+                </span>
+                <br><small style="color: rgba(255,255,255,0.6)">{m.target_behavior[:120]}</small>
+            </div>""", unsafe_allow_html=True)
+    else:
+        st.info("No operator steering moves detected in this conversation.")
+
+    # 12-Rule Reference
+    with st.expander("12-Rule Operator System Reference"):
+        st.markdown("""
+| Rule | Name | Description |
+|------|------|-------------|
+| R01 | Anchor | Set explicit instruction at conversation start |
+| R02 | Echo Check | Ask model to restate your instructions |
+| R03 | Boundary | Enforce scope limits (most frequently violated) |
+| R04 | Correction | Direct error correction |
+| R05 | Not-Shot | Catch voice transcription / typo misinterpretation |
+| R06 | Contrastive | "What changed between your earlier and current response?" |
+| R07 | Reset | Start over / full context reset |
+| R08 | Decompose | Break complex instruction into steps |
+| R09 | Evidence Demand | "Show me where" / proof request |
+| R10 | Meta Call | Call out the drift pattern by name |
+| R11 | Tiger Tamer | Active reinforcement — keep pushing until it sticks |
+| R12 | Kill Switch | Abandon thread / hard stop |
+        """)
 
 
 # ---------------------------------------------------------------------------
