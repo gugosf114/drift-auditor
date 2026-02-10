@@ -20,7 +20,12 @@
       "Bash(powershell -Command:*)",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nAdd Live Analysis mode and Regression Analysis to dashboard\n\nNew sidebar mode selector with three modes:\n- File Analysis \\(existing\\): upload/sample conversation analysis\n- Live Analysis: paste-as-you-go with OLI trending over successive\n  pastes, real-time drift timeline, flag breakdown\n- Regression: scatter plots from 512 batch conversations showing\n  conversation length vs drift, instruction count vs drift score,\n  model type vs correction failure rate, flag accumulation rates,\n  with trendlines and Pearson correlations\n\nAlso adds .claude/ and nul to .gitignore.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
       "Bash(git commit -m \"$\\(cat <<''EOF''\nFix regression mode: DataFrame column access, move glob import to top\n\n- Replace df.get\\(\\) with proper fillna/clip for commission_flags,\n  omission_flags, corrections_failed, corrections_total columns\n- Move ''import glob as glob_mod'' to module top so it''s available\n  in both Regression and File Analysis modes\n- Tested against all 512 batch conversations — all computations pass\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(wc:*)",
+      "WebFetch(domain:assets.anthropic.com)",
+      "WebFetch(domain:www.anthropic.com)",
+      "WebFetch(domain:www-cdn.anthropic.com)",
+      "WebFetch(domain:www.lesswrong.com)"
     ]
   }
 }
