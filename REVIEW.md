@@ -1,5 +1,12 @@
 # Drift Auditor Review
 
+## Results (condensed)
+- **Strong**: modular architecture, solid tests, clear taxonomy, usable CLI + dashboard.
+- **Weak**: brittle editable installs, heuristic-heavy scoring, manual detector wiring, limited perf notes, unclear public API.
+- **Needs improvement**: packaging backend, scoring config centralization, detector interface, type hints/docs, performance guidance.
+- **Suggestions**: add example audit bundles, surface limitations in CLI, provide a minimal SDK wrapper.
+- **Next level**: labeled data calibration, benchmark harness, optional API service, compliance-ready reports.
+
 ## Strengths
 - **Clear separation of concerns**: parsers, detectors, operator-load metrics, and visualization logic are in distinct modules, which makes the pipeline easy to follow.
 - **Good functional coverage**: the test suite exercises detectors, parser formats, and the full audit pipeline.
