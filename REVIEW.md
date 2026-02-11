@@ -1,17 +1,35 @@
 # Drift Auditor Review
 
-## 1. How the code holds up
-- **Clear separation of concerns**: parsers, detectors, operator-load metrics, and visualization logic are kept in distinct modules, which makes the pipeline easy to follow.
-- **Good functional coverage**: the test suite exercises the detectors, parser formats, and full audit pipeline, giving confidence in the core behavior.
-- **Well-defined taxonomy**: the enums and dataclasses in the models layer make drift tags and operator rules explicit and consistent across the codebase.
-- **Practical interfaces**: CLI entry points and a Streamlit dashboard make it straightforward to use without digging into internals.
+## Strengths
+- **Clear separation of concerns**: parsers, detectors, operator-load metrics, and visualization logic are in distinct modules, which makes the pipeline easy to follow.
+- **Good functional coverage**: the test suite exercises detectors, parser formats, and the full audit pipeline.
+- **Well-defined taxonomy**: enums and dataclasses make drift tags and operator rules explicit and consistent.
+- **Practical interfaces**: CLI entry points and a Streamlit dashboard make it usable without digging into internals.
 
-## 2. The idea itself
-The core idea—tracking multi-turn instruction omission and quantifying the human “alignment tax” with an Operator Load Index—is compelling. It targets a real blind spot in single-turn evaluations and gives a measurable way to compare model behavior over longer conversations. The mix of qualitative (taxonomy) and quantitative (metrics + drift scoring) signals is a strong foundation for both research and practical audits.
+## Idea assessment
+The core idea—tracking multi-turn instruction omission and quantifying the human “alignment tax” with an Operator Load Index—is compelling. It targets a blind spot in single-turn evaluations and provides a concrete way to compare model behavior over longer conversations. The mix of qualitative taxonomy plus quantitative metrics gives the concept real auditing leverage.
 
-## 3. Improvements I would suggest
-- **Packaging reliability**: align the build backend with standard `setuptools.build_meta` to make editable installs and dev workflows more predictable.
-- **Reproducible scoring**: centralize scoring weights and thresholds in a versioned config file so audits are easier to compare across releases.
-- **Detector plug-in contract**: formalize an interface for detectors (inputs/outputs, confidence scoring) to make extension and benchmarking simpler.
-- **Type checking & docs**: add type hints and public API docs for high-level entry points to clarify supported inputs/outputs.
-- **Performance notes**: document expected runtime and memory cost for the semantic detector, along with practical fallbacks.
+## Weaknesses / gaps
+- **Packaging friction**: the current editable install path is brittle with the legacy backend.
+- **Heuristic-heavy scoring**: weights/thresholds are embedded in code, making reproducibility across releases harder.
+- **Extensibility**: adding new detectors requires manual wiring without a formal plugin contract.
+- **Performance expectations**: runtime/memory costs (especially semantic detection) are not documented.
+- **Public API clarity**: top-level inputs/outputs could be clearer for external integrations.
+
+## Improvements (near-term)
+- **Use standard `setuptools.build_meta`** for more predictable installs and dev workflows.
+- **Centralize scoring configs** in a versioned file for audit reproducibility.
+- **Define a detector interface** (inputs/outputs + confidence) to make extension safer.
+- **Add type hints & API docs** for the main audit entry points.
+- **Publish performance notes** and fallback guidance for semantic detection.
+
+## Suggestions (practical next steps)
+- **Add example audit bundles** (input + JSON output) so new users can validate quickly.
+- **Surface “known limitations” in CLI output** to set expectations during runs.
+- **Create a minimal SDK wrapper** for integrations (batch jobs, CI checks, dashboards).
+
+## How to take it to the next level
+- **Calibrate with labeled data**: add a small gold dataset to tune weights and report precision/recall.
+- **Benchmark suite**: publish a reproducible benchmark harness for multi-turn drift across models.
+- **Make it a service**: optional API mode that returns structured audit results for product teams.
+- **Governance-ready reporting**: generate standardized PDF/JSON reports for compliance and internal audits.
