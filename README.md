@@ -119,9 +119,15 @@ The Streamlit dashboard has three modes, selectable from the sidebar:
 
 | Mode | What It Does |
 |------|-------------|
-| **File Analysis** | Upload a conversation file (.txt or .json) — full 7-tab audit with lifecycle tracking, barometer, persistence, commission, omission, structural, and operator analysis. Cross-model leaderboard and export. |
+| **File Analysis** | Upload a conversation file (.txt or .json) — full 7-tab audit with lifecycle tracking, barometer, persistence, commission, omission, structural, and operator analysis. Drift accumulation timeline, tag breakdown, cross-model leaderboard and export. All charts have PNG download buttons. |
 | **Live Analysis** | Paste-as-you-go. Paste a growing conversation, hit Analyze, watch OLI/Alignment Tax/Drift Score trend in real-time over successive pastes. Designed for live demos. |
-| **Regression** | Statistical analysis across 512 batch conversations. Scatter plots with trendlines: conversation length vs drift, instruction count vs drift, model type vs correction failure rate, flag accumulation rates. Auto-generates Pearson correlations and key findings. |
+| **Regression** | Statistical analysis across 512 batch conversations. Scatter plots with trendlines: conversation length vs drift, instruction count vs drift, model type vs correction failure rate, flag accumulation rates. Auto-generates Pearson correlations and key findings. All charts exportable as PNG. |
+
+<!-- Add screenshots after running the dashboard:
+![Drift Timeline](docs/img/drift_timeline.png)
+![Tag Breakdown](docs/img/tag_breakdown.png)
+![Regression Scatter](docs/img/regression_scatter.png)
+-->
 
 ## Install
 

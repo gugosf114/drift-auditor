@@ -549,6 +549,136 @@ def build_omission_fig(report: AuditReport) -> go.Figure:
 
 
 # ---------------------------------------------------------------------------
+# Chart Export Helper
+# ---------------------------------------------------------------------------
+
+def chart_export_png(fig: go.Figure, filename: str, label: str = "Download Chart PNG") -> None:
+    """Render a Plotly figure to PNG bytes and offer a Streamlit download button."""
+    try:
+        img_bytes = fig.to_image(format="png", width=1200, height=600, scale=2)
+        st.download_button(
+            label=f"\U0001f4f7 {label}",
+            data=img_bytes,
+            file_name=filename,
+            mime="image/png",
+        )
+    except Exception:
+        # kaleido not installed — degrade gracefully
+        pass
+
+
+# ---------------------------------------------------------------------------
+# Per-Turn Drift Accumulation Timeline
+# ---------------------------------------------------------------------------
+
+def build_cumulative_drift_fig(report: AuditReport) -> go.Figure:
+    """Line chart: cumulative drift flag count per turn across the conversation."""
+    all_flags = (
+        [(f.turn, "Commission", f.severity) for f in report.commission_flags]
+        + [(f.turn, "Omission", f.severity) for f in report.omission_flags]
+    )
+    if not all_flags:
+        return None
+
+    max_turn = report.total_turns or max(t for t, _, _ in all_flags) + 1
+    cum_count = [0] * (max_turn + 1)
+    cum_severity = [0.0] * (max_turn + 1)
+
+    for turn, _, sev in all_flags:
+        if 0 <= turn <= max_turn:
+            cum_count[turn] += 1
+            cum_severity[turn] += sev
+
+    # Running totals
+    for i in range(1, len(cum_count)):
+        cum_count[i] += cum_count[i - 1]
+        cum_severity[i] += cum_severity[i - 1]
+
+    turns = list(range(len(cum_count)))
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=turns, y=cum_count,
+        mode="lines",
+        name="Cumulative Flags",
+        line=dict(color="#f59e0b", width=2),
+        fill="tozeroy",
+        fillcolor="rgba(245,158,11,0.08)",
+    ))
+    fig.add_trace(go.Scatter(
+        x=turns, y=cum_severity,
+        mode="lines",
+        name="Cumulative Severity",
+        line=dict(color="#ef4444", width=2, dash="dot"),
+        yaxis="y2",
+    ))
+
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        height=300,
+        xaxis=dict(title="Turn", gridcolor="#2a2623", zeroline=False),
+        yaxis=dict(title="Flag Count", gridcolor="#2a2623", zeroline=False),
+        yaxis2=dict(title="Total Severity", overlaying="y", side="right",
+                    gridcolor="rgba(0,0,0,0)", zeroline=False),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
+                    bgcolor="rgba(0,0,0,0)", font=dict(size=11)),
+        hovermode="x unified",
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Tag Breakdown Bar Chart
+# ---------------------------------------------------------------------------
+
+def build_tag_breakdown_fig(report: AuditReport) -> go.Figure:
+    """Horizontal bar chart showing which drift tags dominate the conversation."""
+    tag_counts: dict[str, int] = defaultdict(int)
+    tag_severity: dict[str, float] = defaultdict(float)
+
+    for f in report.commission_flags + report.omission_flags:
+        tag = f.tag or "UNTAGGED"
+        tag_counts[tag] += 1
+        tag_severity[tag] += f.severity
+
+    if not tag_counts:
+        return None
+
+    # Sort by count descending
+    sorted_tags = sorted(tag_counts.keys(), key=lambda t: tag_counts[t], reverse=True)
+    counts = [tag_counts[t] for t in sorted_tags]
+    avg_sev = [round(tag_severity[t] / tag_counts[t], 1) for t in sorted_tags]
+
+    # Color map
+    tag_colors = {
+        "SYCOPHANCY": "#ef4444", "REALITY_DISTORT": "#dc2626",
+        "CONF_INFLATE": "#f97316", "INSTR_DROP": "#f59e0b",
+        "SEM_DILUTE": "#eab308", "CORR_DECAY": "#a855f7",
+        "CONFLICT_PAIR": "#8b5cf6", "SHADOW_PATTERN": "#6366f1",
+        "OP_MOVE": "#3b82f6", "VOID_DETECTED": "#64748b",
+    }
+    colors = [tag_colors.get(t, "#94a3b8") for t in sorted_tags]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        y=sorted_tags, x=counts,
+        orientation="h",
+        marker=dict(color=colors, line=dict(width=0)),
+        hovertext=[f"{t}: {c} flags, avg severity {s}" for t, c, s in zip(sorted_tags, counts, avg_sev)],
+        hoverinfo="text",
+    ))
+
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        height=max(200, len(sorted_tags) * 40 + 60),
+        xaxis=dict(title="Flag Count", gridcolor="rgba(255,255,255,0.06)"),
+        yaxis=dict(autorange="reversed"),
+        showlegend=False,
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Cached audit function
 # ---------------------------------------------------------------------------
 
@@ -948,6 +1078,7 @@ elif analysis_mode == "\U0001f4ca Regression":
                     bgcolor="rgba(0,0,0,0)"),
     )
     st.plotly_chart(fig1, use_container_width=True, config={"displaylogo": False})
+    chart_export_png(fig1, "regression_length_vs_drift.png", "Download Scatter PNG")
 
     # ----- Plot 2: Instruction Count vs Drift Score -----
     st.markdown("### 2. Instruction Count → Drift Score")
@@ -988,6 +1119,7 @@ elif analysis_mode == "\U0001f4ca Regression":
                     bgcolor="rgba(0,0,0,0)"),
     )
     st.plotly_chart(fig2, use_container_width=True, config={"displaylogo": False})
+    chart_export_png(fig2, "regression_instructions_vs_drift.png", "Download Scatter PNG")
 
     # ----- Plot 3: Model Type vs Correction Failure Rate -----
     st.markdown("### 3. Model Type → Correction Failure Rate")
@@ -1027,6 +1159,7 @@ elif analysis_mode == "\U0001f4ca Regression":
         showlegend=False,
     )
     st.plotly_chart(fig3, use_container_width=True, config={"displaylogo": False})
+    chart_export_png(fig3, "regression_model_correction_rate.png", "Download Bar Chart PNG")
 
     # ----- Plot 4: Conversation Length vs Total Flags -----
     st.markdown("### 4. Conversation Length → Total Flags")
@@ -1068,6 +1201,7 @@ elif analysis_mode == "\U0001f4ca Regression":
                     bgcolor="rgba(0,0,0,0)"),
     )
     st.plotly_chart(fig4, use_container_width=True, config={"displaylogo": False})
+    chart_export_png(fig4, "regression_length_vs_flags.png", "Download Scatter PNG")
 
     # ----- Summary Stats Table -----
     st.markdown("### Summary Statistics by Model")
@@ -1228,6 +1362,7 @@ else:
     timeline_fig = build_timeline_fig(report)
     if report.commission_flags or report.omission_flags or report.correction_events:
         st.plotly_chart(timeline_fig, use_container_width=True, config={"displaylogo": False})
+        chart_export_png(timeline_fig, f"drift_timeline_{report.conversation_id}.png", "Download Timeline PNG")
     else:
         st.success("No drift flags detected across the conversation.")
 
@@ -1235,6 +1370,20 @@ else:
     if report.barometer_signals:
         strip_fig = build_barometer_strip(report)
         st.plotly_chart(strip_fig, use_container_width=True, config={"displayModeBar": False})
+
+    # Per-turn drift accumulation
+    cum_fig = build_cumulative_drift_fig(report)
+    if cum_fig is not None:
+        st.subheader("Drift Accumulation")
+        st.plotly_chart(cum_fig, use_container_width=True, config={"displaylogo": False})
+        chart_export_png(cum_fig, f"drift_accumulation_{report.conversation_id}.png", "Download Accumulation PNG")
+
+    # Tag breakdown
+    tag_fig = build_tag_breakdown_fig(report)
+    if tag_fig is not None:
+        st.subheader("Tag Breakdown")
+        st.plotly_chart(tag_fig, use_container_width=True, config={"displaylogo": False})
+        chart_export_png(tag_fig, f"tag_breakdown_{report.conversation_id}.png", "Download Tag Breakdown PNG")
 
 
     # ---------------------------------------------------------------------------
