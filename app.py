@@ -34,116 +34,158 @@ from drift_auditor import (
     report_to_json,
 )
 from operator_load import compute_operator_load, OperatorLoadMetrics
+from detectors.frustration import compute_frustration_index, FrustrationResult
 
 # ---------------------------------------------------------------------------
 # Page config (must be first Streamlit call)
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="Drift Auditor",
-    page_icon="\U0001f4e1",
+    page_icon="\U0001f9ea",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------------------------
-# CSS — dark glassmorphism theme
+# Theme System
 # ---------------------------------------------------------------------------
-st.markdown("""
+
+THEMES = {
+    "Ember": {
+        "label": "Ember",
+        "desc": "Warm dark with amber accents",
+        "bg": "#0a0807", "surface": "#12100f", "border": "#2a2623",
+        "border_accent": "#3a3530", "text": "#e8dfd0", "muted": "#8b7d6b",
+        "chart_text": "#c4b8a3", "accent": "#f59e0b", "accent_glow": "rgba(245,158,11,0.08)",
+        "accent_hover": "rgba(245,158,11,0.15)",
+        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
+    },
+    "Midnight": {
+        "label": "Midnight",
+        "desc": "Cool blue on deep navy",
+        "bg": "#0b0e14", "surface": "#111720", "border": "#1e2a3a",
+        "border_accent": "#2a3a4e", "text": "#d0dce8", "muted": "#6b7d8b",
+        "chart_text": "#a3b8c4", "accent": "#3b82f6", "accent_glow": "rgba(59,130,246,0.08)",
+        "accent_hover": "rgba(59,130,246,0.15)",
+        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
+    },
+    "Phosphor": {
+        "label": "Phosphor",
+        "desc": "Terminal green on black",
+        "bg": "#050505", "surface": "#0a0f0a", "border": "#1a2e1a",
+        "border_accent": "#2a4a2a", "text": "#b8e6b8", "muted": "#5a8a5a",
+        "chart_text": "#8bc48b", "accent": "#22c55e", "accent_glow": "rgba(34,197,94,0.08)",
+        "accent_hover": "rgba(34,197,94,0.15)",
+        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
+    },
+    "Infrared": {
+        "label": "Infrared",
+        "desc": "Dark with crimson edge",
+        "bg": "#0a0506", "surface": "#120a0c", "border": "#2a1620",
+        "border_accent": "#3a2030", "text": "#e8d0d8", "muted": "#8b6b75",
+        "chart_text": "#c4a3b0", "accent": "#ef4444", "accent_glow": "rgba(239,68,68,0.08)",
+        "accent_hover": "rgba(239,68,68,0.15)",
+        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
+    },
+    "Bone": {
+        "label": "Bone",
+        "desc": "Light mode — paper white",
+        "bg": "#faf8f5", "surface": "#ffffff", "border": "#e5e0d8",
+        "border_accent": "#d5d0c8", "text": "#1a1610", "muted": "#8b8578",
+        "chart_text": "#5a5548", "accent": "#b45309", "accent_glow": "rgba(180,83,9,0.06)",
+        "accent_hover": "rgba(180,83,9,0.12)",
+        "green": "#16a34a", "red": "#dc2626", "deep_red": "#b91c1c",
+    },
+}
+
+# Theme picker in session state (must be before sidebar to apply CSS first pass)
+if "theme_name" not in st.session_state:
+    st.session_state["theme_name"] = "Ember"
+T = THEMES[st.session_state["theme_name"]]
+
+
+def _build_css(t: dict) -> str:
+    return f"""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
-/* --- Base theme: warm dark with amber accents (Bakers Agent palette) --- */
-.stApp {
-    background: #0a0807;
+.stApp {{
+    background: {t["bg"]};
     font-family: 'DM Sans', sans-serif;
-    color: #e8dfd0;
-}
-
-/* Glass card — warm dark */
-.glass-card {
-    background: #12100f;
-    border: 1px solid #2a2623;
+    color: {t["text"]};
+}}
+.glass-card {{
+    background: {t["surface"]};
+    border: 1px solid {t["border"]};
     border-radius: 4px;
     padding: 20px;
     margin-bottom: 8px;
-}
-
-.glass-card-hero {
-    background: #12100f;
-    border: 1px solid #3a3530;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.15);
+}}
+.glass-card-hero {{
+    background: {t["surface"]};
+    border: 1px solid {t["border_accent"]};
     border-radius: 4px;
     padding: 28px 20px;
     text-align: center;
-    box-shadow: 0 0 30px rgba(245, 158, 11, 0.08);
-}
-
-.metric-value {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 0 30px {t["accent_glow"]};
+}}
+.metric-value {{
     font-size: 2.8rem;
     font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
     line-height: 1.1;
     text-align: center;
-}
-
-.metric-value-hero {
+}}
+.metric-value-hero {{
     font-size: 4rem;
     font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
     line-height: 1.1;
     text-align: center;
-}
-
-.metric-label {
+}}
+.metric-label {{
     font-size: 0.72rem;
     font-family: 'JetBrains Mono', monospace;
     text-transform: uppercase;
     letter-spacing: 2.5px;
-    color: #8b7d6b;
+    color: {t["muted"]};
     text-align: center;
     margin-bottom: 6px;
-}
-
-.metric-sub {
+}}
+.metric-sub {{
     font-size: 0.78rem;
     font-family: 'JetBrains Mono', monospace;
-    color: #8b7d6b;
+    color: {t["muted"]};
     text-align: center;
     margin-top: 4px;
-}
-
-.status-held {
-    color: #22c55e;
+}}
+.status-held {{
+    color: {t["green"]};
     font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
-}
-
-.status-failed {
-    color: #ef4444;
+}}
+.status-failed {{
+    color: {t["red"]};
     font-weight: 700;
     font-family: 'JetBrains Mono', monospace;
-}
-
-.event-card {
-    background: #12100f;
-    border: 1px solid #2a2623;
+}}
+.event-card {{
+    background: {t["surface"]};
+    border: 1px solid {t["border"]};
     border-radius: 4px;
     padding: 16px;
     margin-bottom: 10px;
-}
-
-/* Sidebar — warm dark */
-section[data-testid="stSidebar"] {
-    background: #0a0807;
-    border-right: 1px solid #2a2623;
-}
-
-/* Tab styling */
-.stTabs [data-baseweb="tab-list"] {
+}}
+section[data-testid="stSidebar"] {{
+    background: {t["bg"]};
+    border-right: 1px solid {t["border"]};
+}}
+.stTabs [data-baseweb="tab-list"] {{
     gap: 4px;
-    border-bottom: 1px solid #2a2623;
-}
-
-.stTabs [data-baseweb="tab"] {
+    border-bottom: 1px solid {t["border"]};
+}}
+.stTabs [data-baseweb="tab"] {{
     background: transparent;
     border-radius: 4px 4px 0 0;
     padding: 8px 16px;
@@ -151,112 +193,95 @@ section[data-testid="stSidebar"] {
     font-size: 0.8rem;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #8b7d6b;
-}
-
-.stTabs [data-baseweb="tab"][aria-selected="true"] {
-    background: #12100f;
-    color: #f59e0b;
-    border-bottom: 2px solid #f59e0b;
-}
-
-/* Headers */
-h1, h2, h3 {
+    color: {t["muted"]};
+}}
+.stTabs [data-baseweb="tab"][aria-selected="true"] {{
+    background: {t["surface"]};
+    color: {t["accent"]};
+    border-bottom: 2px solid {t["accent"]};
+}}
+h1, h2, h3 {{
     font-family: 'JetBrains Mono', monospace;
-    color: #e8dfd0;
-}
-
-/* Expander styling */
-.streamlit-expanderHeader {
+    color: {t["text"]};
+}}
+.streamlit-expanderHeader {{
     font-family: 'JetBrains Mono', monospace;
     font-size: 0.85rem;
-    color: #c4b8a3;
-}
-
-/* Metric overrides */
-[data-testid="stMetricValue"] {
+    color: {t["chart_text"]};
+}}
+[data-testid="stMetricValue"] {{
     font-family: 'JetBrains Mono', monospace;
-    color: #f59e0b;
-}
-
-[data-testid="stMetricLabel"] {
+    color: {t["accent"]};
+}}
+[data-testid="stMetricLabel"] {{
     font-family: 'JetBrains Mono', monospace;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #8b7d6b;
-}
-
-/* Button styling */
-.stButton > button {
-    background: #12100f;
-    border: 1px solid #2a2623;
-    color: #e8dfd0;
+    color: {t["muted"]};
+}}
+.stButton > button {{
+    background: {t["surface"]};
+    border: 1px solid {t["border"]};
+    color: {t["text"]};
     font-family: 'JetBrains Mono', monospace;
     text-transform: uppercase;
     letter-spacing: 1px;
     font-size: 0.78rem;
     border-radius: 4px;
     transition: all 0.2s;
-}
-
-.stButton > button:hover {
-    border-color: #f59e0b;
-    color: #f59e0b;
-    box-shadow: 0 0 12px rgba(245, 158, 11, 0.15);
-}
-
-/* Download button */
-.stDownloadButton > button {
-    background: #12100f;
-    border: 1px solid #f59e0b;
-    color: #f59e0b;
+}}
+.stButton > button:hover {{
+    border-color: {t["accent"]};
+    color: {t["accent"]};
+    box-shadow: 0 0 12px {t["accent_hover"]};
+}}
+.stDownloadButton > button {{
+    background: {t["surface"]};
+    border: 1px solid {t["accent"]};
+    color: {t["accent"]};
     font-family: 'JetBrains Mono', monospace;
     border-radius: 4px;
-}
-
-/* Text area / inputs */
-.stTextArea textarea, .stTextInput input {
-    background: #12100f;
-    border: 1px solid #2a2623;
-    color: #e8dfd0;
+}}
+.stTextArea textarea, .stTextInput input {{
+    background: {t["surface"]};
+    border: 1px solid {t["border"]};
+    color: {t["text"]};
     font-family: 'DM Sans', sans-serif;
     border-radius: 4px;
-}
-
-/* File uploader */
-[data-testid="stFileUploader"] {
-    border: 1px dashed #2a2623;
+}}
+[data-testid="stFileUploader"] {{
+    border: 1px dashed {t["border"]};
     border-radius: 4px;
-}
-
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0a0807; }
-::-webkit-scrollbar-thumb { background: #2a2623; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
-
-/* Info/Success/Warning/Error boxes */
-.stAlert {
+}}
+::-webkit-scrollbar {{ width: 6px; }}
+::-webkit-scrollbar-track {{ background: {t["bg"]}; }}
+::-webkit-scrollbar-thumb {{ background: {t["border"]}; border-radius: 3px; }}
+::-webkit-scrollbar-thumb:hover {{ background: {t["accent"]}; }}
+.stAlert {{
     border-radius: 4px;
     font-family: 'DM Sans', sans-serif;
-}
+}}
 </style>
-""", unsafe_allow_html=True)
+"""
+
+
+# Apply current theme CSS
+st.markdown(_build_css(T), unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
 # Helper functions — all typed, all pure
 # ---------------------------------------------------------------------------
 
 def score_color(score: int) -> str:
-    """Map a 1-10 severity score to a hex color (warm palette)."""
+    """Map a 1-10 severity score to a themed hex color."""
     if score <= 3:
-        return "#22c55e"   # green — clean
+        return T["green"]
     elif score <= 5:
-        return "#f59e0b"   # amber — moderate
+        return T["accent"]
     elif score <= 7:
-        return "#ef4444"   # red — elevated
+        return T["red"]
     else:
-        return "#dc2626"   # deep red — severe
+        return T["deep_red"]
 
 
 def score_label(score: int) -> str:
@@ -276,7 +301,7 @@ def score_label(score: int) -> str:
 PLOTLY_LAYOUT = dict(
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="#c4b8a3", family="JetBrains Mono, DM Sans, sans-serif", size=12),
+    font=dict(color=T["chart_text"], family="JetBrains Mono, DM Sans, sans-serif", size=12),
     margin=dict(l=50, r=30, t=40, b=40),
 )
 
@@ -294,6 +319,117 @@ def render_metric_card(label: str, score: int, subtitle: str, hero: bool = False
         <div class="metric-sub">{subtitle}</div>
     </div>
     """, unsafe_allow_html=True)
+
+
+import random as _random
+
+def _racing_stickmen_html() -> str:
+    """SVG stickmen with animated limbs racing left-to-right. Different winner each time."""
+    import random
+    # Randomize who wins
+    speeds = [random.uniform(4.0, 5.5), random.uniform(4.0, 5.5), random.uniform(4.0, 5.5)]
+    winner = random.randint(0, 2)
+    speeds[winner] = random.uniform(3.0, 3.8)  # winner is fastest
+
+    colors = [T["red"], T["accent"], T["green"]]  # red, yellow/amber, green
+    names = ["Runner", "Swimmer", "Cyclist"]
+
+    # SVG stickman running (pumping arms + legs)
+    runner_svg = """<g>
+        <circle cx="15" cy="6" r="5" fill="{c}" />
+        <line x1="15" y1="11" x2="15" y2="26" stroke="{c}" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="15" y1="16" x2="8" y2="22" stroke="{c}" stroke-width="2" stroke-linecap="round">
+            <animate attributeName="x2" values="8;22;8" dur="0.4s" repeatCount="indefinite"/></line>
+        <line x1="15" y1="16" x2="22" y2="22" stroke="{c}" stroke-width="2" stroke-linecap="round">
+            <animate attributeName="x2" values="22;8;22" dur="0.4s" repeatCount="indefinite"/></line>
+        <line x1="15" y1="26" x2="8" y2="36" stroke="{c}" stroke-width="2.5" stroke-linecap="round">
+            <animate attributeName="x2" values="8;22;8" dur="0.35s" repeatCount="indefinite"/></line>
+        <line x1="15" y1="26" x2="22" y2="36" stroke="{c}" stroke-width="2.5" stroke-linecap="round">
+            <animate attributeName="x2" values="22;8;22" dur="0.35s" repeatCount="indefinite"/></line>
+    </g>"""
+
+    # SVG stickman swimming (arm strokes)
+    swimmer_svg = """<g>
+        <circle cx="15" cy="18" r="5" fill="{c}" />
+        <line x1="15" y1="23" x2="15" y2="30" stroke="{c}" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="15" y1="25" x2="6" y2="20" stroke="{c}" stroke-width="2" stroke-linecap="round">
+            <animate attributeName="x2" values="6;24;6" dur="0.6s" repeatCount="indefinite"/>
+            <animate attributeName="y2" values="20;16;20" dur="0.6s" repeatCount="indefinite"/></line>
+        <line x1="15" y1="25" x2="24" y2="20" stroke="{c}" stroke-width="2" stroke-linecap="round">
+            <animate attributeName="x2" values="24;6;24" dur="0.6s" repeatCount="indefinite"/>
+            <animate attributeName="y2" values="20;16;20" dur="0.6s" repeatCount="indefinite"/></line>
+        <line x1="15" y1="30" x2="10" y2="36" stroke="{c}" stroke-width="2" stroke-linecap="round">
+            <animate attributeName="x2" values="10;20;10" dur="0.5s" repeatCount="indefinite"/></line>
+        <line x1="15" y1="30" x2="20" y2="36" stroke="{c}" stroke-width="2" stroke-linecap="round">
+            <animate attributeName="x2" values="20;10;20" dur="0.5s" repeatCount="indefinite"/></line>
+        <ellipse cx="15" cy="32" rx="12" ry="2" fill="{c}" opacity="0.15">
+            <animate attributeName="rx" values="12;8;12" dur="0.6s" repeatCount="indefinite"/></ellipse>
+    </g>"""
+
+    # SVG stickman cycling (pedaling legs, bent posture)
+    cyclist_svg = """<g>
+        <circle cx="15" cy="8" r="5" fill="{c}" />
+        <line x1="15" y1="13" x2="13" y2="24" stroke="{c}" stroke-width="2.5" stroke-linecap="round"/>
+        <line x1="13" y1="18" x2="6" y2="15" stroke="{c}" stroke-width="2" stroke-linecap="round"/>
+        <line x1="13" y1="18" x2="22" y2="16" stroke="{c}" stroke-width="2" stroke-linecap="round"/>
+        <circle cx="13" cy="30" r="7" fill="none" stroke="{c}" stroke-width="1.5" opacity="0.3"/>
+        <line x1="13" y1="24" x2="8" y2="32" stroke="{c}" stroke-width="2.5" stroke-linecap="round">
+            <animate attributeName="x2" values="8;18;8" dur="0.4s" repeatCount="indefinite"/>
+            <animate attributeName="y2" values="32;28;32" dur="0.4s" repeatCount="indefinite"/></line>
+        <line x1="13" y1="24" x2="18" y2="28" stroke="{c}" stroke-width="2.5" stroke-linecap="round">
+            <animate attributeName="x2" values="18;8;18" dur="0.4s" repeatCount="indefinite"/>
+            <animate attributeName="y2" values="28;32;28" dur="0.4s" repeatCount="indefinite"/></line>
+    </g>"""
+
+    svgs = [runner_svg, swimmer_svg, cyclist_svg]
+
+    lanes = ""
+    for i in range(3):
+        figure = svgs[i].replace("{c}", colors[i])
+        lanes += f"""
+        <div style="display: flex; align-items: center; margin: 6px 0; height: 50px;">
+            <div style="width: 70px; font-family: 'JetBrains Mono', monospace;
+                        font-size: 0.7rem; color: {colors[i]}; text-align: right;
+                        padding-right: 10px; font-weight: 600;">{names[i]}</div>
+            <div style="flex: 1; position: relative; background: {T["surface"]};
+                        border: 1px solid {T["border"]}; border-radius: 4px; height: 46px;
+                        overflow: hidden;">
+                <div style="position: absolute; top: 2px;
+                            animation: race-move {speeds[i]}s linear infinite;">
+                    <svg viewBox="0 0 30 40" width="30" height="40">{figure}</svg>
+                </div>
+            </div>
+        </div>"""
+
+    # Finish line
+    return f"""
+    <div style="padding: 30px 20px; text-align: center;">
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+                    color: {T["accent"]}; letter-spacing: 2px; text-transform: uppercase;
+                    margin-bottom: 16px;">
+            Auditing conversation...
+        </div>
+        <div style="max-width: 600px; margin: 0 auto; position: relative;">
+            {lanes}
+            <div style="position: absolute; right: 0; top: 0; bottom: 0; width: 3px;
+                        background: repeating-linear-gradient(
+                            to bottom, {T["text"]} 0px, {T["text"]} 4px,
+                            {T["bg"]} 4px, {T["bg"]} 8px);
+                        opacity: 0.5;">
+            </div>
+        </div>
+        <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+                    color: {T["muted"]}; margin-top: 10px;">
+            Analyzing drift patterns...
+        </div>
+        <style>
+            @keyframes race-move {{
+                0% {{ left: -30px; }}
+                100% {{ left: calc(100% - 4px); }}
+            }}
+        </style>
+    </div>
+    """
 
 
 def build_timeline_fig(report: AuditReport) -> go.Figure:
@@ -679,10 +815,255 @@ def build_tag_breakdown_fig(report: AuditReport) -> go.Figure:
 
 
 # ---------------------------------------------------------------------------
+# Frustration Index Visuals
+# ---------------------------------------------------------------------------
+
+def build_frustration_gauge(result: FrustrationResult) -> str:
+    """Return HTML/CSS for a vertical thermometer gauge."""
+    avg = result.average
+    pct = min(100, max(0, avg * 10))  # 0–10 → 0–100%
+
+    # Color gradient: blue (0) → amber (5) → red (10)
+    if avg <= 3:
+        bar_color = T["green"]
+        glow = T["green"]
+    elif avg <= 5:
+        bar_color = T["accent"]
+        glow = T["accent"]
+    elif avg <= 7:
+        bar_color = T["red"]
+        glow = T["red"]
+    else:
+        bar_color = T["deep_red"]
+        glow = T["deep_red"]
+
+    trend_icon = {"rising": "↑", "falling": "↓", "spike": "⚡", "stable": "—"}.get(result.trend, "—")
+    trend_label = result.trend.capitalize()
+
+    return f"""
+    <div class="glass-card" style="text-align: center; padding: 24px 16px;">
+        <div class="metric-label">Frustration Index</div>
+        <div style="
+            width: 36px; height: 160px; margin: 16px auto 8px;
+            background: {T["surface"]}; border: 1px solid {T["border"]};
+            border-radius: 18px; position: relative; overflow: hidden;
+        ">
+            <div style="
+                position: absolute; bottom: 0; width: 100%;
+                height: {pct}%;
+                background: {bar_color};
+                border-radius: 0 0 18px 18px;
+                box-shadow: 0 0 12px {glow}40;
+                transition: height 0.5s ease;
+            "></div>
+        </div>
+        <div class="metric-value" style="color: {bar_color}; font-size: 2rem;">{avg:.1f}</div>
+        <div class="metric-sub">/ 10</div>
+        <div style="margin-top: 8px; font-family: 'JetBrains Mono', monospace;
+                    font-size: 0.75rem; color: {T["muted"]};">
+            {trend_icon} {trend_label} &nbsp;·&nbsp; Peak {result.peak:.1f} at T{result.peak_turn}
+        </div>
+        <div style="margin-top: 4px; font-family: 'JetBrains Mono', monospace;
+                    font-size: 0.65rem; color: {T["muted"]};">
+            via {result.backend}
+        </div>
+    </div>
+    """
+
+
+def build_frustration_line_fig(result: FrustrationResult) -> go.Figure:
+    """Line chart: frustration score per operator message over conversation turns."""
+    if not result.per_turn:
+        return None
+
+    fig = go.Figure()
+
+    # Frustration zones (background bands)
+    fig.add_hrect(y0=0, y1=3, fillcolor=T["green"], opacity=0.05, line_width=0)
+    fig.add_hrect(y0=3, y1=5, fillcolor=T["accent"], opacity=0.05, line_width=0)
+    fig.add_hrect(y0=5, y1=7, fillcolor=T["red"], opacity=0.05, line_width=0)
+    fig.add_hrect(y0=7, y1=10, fillcolor=T["deep_red"], opacity=0.05, line_width=0)
+
+    # Build colors per point
+    colors = []
+    for s in result.per_turn:
+        if s <= 3:
+            colors.append(T["green"])
+        elif s <= 5:
+            colors.append(T["accent"])
+        elif s <= 7:
+            colors.append(T["red"])
+        else:
+            colors.append(T["deep_red"])
+
+    # Line trace
+    fig.add_trace(go.Scatter(
+        x=result.turn_indices,
+        y=result.per_turn,
+        mode="lines+markers",
+        name="Frustration",
+        line=dict(color=T["accent"], width=2),
+        marker=dict(size=7, color=colors, line=dict(width=1, color=T["border"])),
+        hovertext=[
+            f"Turn {t}: {s:.1f}/10"
+            for t, s in zip(result.turn_indices, result.per_turn)
+        ],
+        hoverinfo="text",
+        fill="tozeroy",
+        fillcolor=f"rgba({int(T['accent'][1:3],16)},{int(T['accent'][3:5],16)},{int(T['accent'][5:7],16)},0.06)",
+    ))
+
+    # Average line
+    fig.add_hline(
+        y=result.average, line_dash="dot",
+        line_color=T["muted"], opacity=0.6,
+        annotation_text=f"avg {result.average:.1f}",
+        annotation_position="top right",
+        annotation_font=dict(size=10, color=T["muted"]),
+    )
+
+    fig.update_layout(
+        **PLOTLY_LAYOUT,
+        height=280,
+        xaxis=dict(title="Conversation Turn", gridcolor="rgba(255,255,255,0.06)"),
+        yaxis=dict(title="Frustration Score", range=[0, 10.5], gridcolor="rgba(255,255,255,0.06)"),
+        showlegend=False,
+    )
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Drift Flask — JS Canvas animated flask tied to drift score
+# ---------------------------------------------------------------------------
+
+def build_drift_flask_html(score: int) -> str:
+    """JavaScript canvas Erlenmeyer flask. Fill level + bubble intensity tied to drift score."""
+    # Score 1-3: green, calm. 4-6: amber, moderate. 7-10: red, aggressive bubbles.
+    if score <= 3:
+        liquid_color = T["green"]
+        bubble_count = 3
+        bubble_speed = 2.0
+    elif score <= 5:
+        liquid_color = T["accent"]
+        bubble_count = 6
+        bubble_speed = 1.4
+    elif score <= 7:
+        liquid_color = T["red"]
+        bubble_count = 10
+        bubble_speed = 0.9
+    else:
+        liquid_color = T["deep_red"]
+        bubble_count = 15
+        bubble_speed = 0.5
+
+    fill_pct = max(10, min(90, score * 10))  # 10%–90% fill
+
+    return f"""
+    <div class="glass-card" style="text-align: center; padding: 16px 12px;
+         box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 20px {liquid_color}15;">
+        <div class="metric-label">Overall Drift</div>
+        <canvas id="driftFlask" width="120" height="180" style="margin: 8px auto; display: block;"></canvas>
+        <div class="metric-value" style="color: {liquid_color}; font-size: 2.4rem;">{score}</div>
+        <div class="metric-sub">/ 10</div>
+    </div>
+    <script>
+    (function() {{
+        const canvas = document.getElementById('driftFlask');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        const W = 120, H = 180;
+        const fillPct = {fill_pct} / 100;
+        const liquidColor = '{liquid_color}';
+        const bgColor = '{T["surface"]}';
+        const borderColor = '{T["border_accent"]}';
+        const bubbleCount = {bubble_count};
+        const bubbleSpeed = {bubble_speed};
+
+        // Flask shape points
+        function flaskPath(ctx) {{
+            ctx.beginPath();
+            ctx.moveTo(45, 55);
+            ctx.lineTo(15, 150);
+            ctx.quadraticCurveTo(10, 168, 30, 172);
+            ctx.lineTo(90, 172);
+            ctx.quadraticCurveTo(110, 168, 105, 150);
+            ctx.lineTo(75, 55);
+            ctx.closePath();
+        }}
+
+        // Bubbles
+        let bubbles = [];
+        for (let i = 0; i < bubbleCount; i++) {{
+            bubbles.push({{
+                x: 30 + Math.random() * 60,
+                y: 172 - Math.random() * (120 * fillPct),
+                r: 1.5 + Math.random() * 3,
+                speed: (0.3 + Math.random() * 0.7) / bubbleSpeed,
+                opacity: 0.3 + Math.random() * 0.5,
+            }});
+        }}
+
+        function draw() {{
+            ctx.clearRect(0, 0, W, H);
+
+            // Neck
+            ctx.fillStyle = borderColor;
+            ctx.roundRect(42, 4, 36, 6, 3);
+            ctx.fill();
+
+            // Flask body outline
+            ctx.beginPath();
+            ctx.moveTo(45, 10); ctx.lineTo(45, 55);
+            ctx.lineTo(15, 150);
+            ctx.quadraticCurveTo(10, 168, 30, 172);
+            ctx.lineTo(90, 172);
+            ctx.quadraticCurveTo(110, 168, 105, 150);
+            ctx.lineTo(75, 55); ctx.lineTo(75, 10);
+            ctx.strokeStyle = borderColor;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Liquid fill
+            ctx.save();
+            flaskPath(ctx);
+            ctx.clip();
+            const liquidTop = 172 - (117 * fillPct);
+            ctx.fillStyle = liquidColor;
+            ctx.globalAlpha = 0.5;
+            ctx.fillRect(0, liquidTop, W, 172 - liquidTop);
+            ctx.globalAlpha = 1.0;
+
+            // Bubbles
+            for (let b of bubbles) {{
+                ctx.beginPath();
+                ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+                ctx.fillStyle = liquidColor;
+                ctx.globalAlpha = b.opacity;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+
+                b.y -= b.speed;
+                if (b.y < liquidTop - 10) {{
+                    b.y = 172 - Math.random() * 20;
+                    b.x = 30 + Math.random() * 60;
+                    b.opacity = 0.3 + Math.random() * 0.5;
+                }}
+            }}
+            ctx.restore();
+
+            requestAnimationFrame(draw);
+        }}
+        draw();
+    }})();
+    </script>
+    """
+
+
+# ---------------------------------------------------------------------------
 # Cached audit function
 # ---------------------------------------------------------------------------
 
-@st.cache_data(show_spinner="Auditing conversation\u2026")
+@st.cache_data(show_spinner=False)
 def run_audit(
     file_bytes: bytes,
     system_prompt: str,
@@ -708,8 +1089,20 @@ def run_audit(
 # ---------------------------------------------------------------------------
 
 with st.sidebar:
-    st.markdown("## \U0001f4e1 Drift Auditor")
+    st.markdown("## \U0001f9ea Drift Auditor")
     st.caption("Multi-turn drift diagnostic tool")
+
+    # Theme selector — radio buttons, no dropdown
+    _theme_choice = st.radio(
+        "Theme",
+        list(THEMES.keys()),
+        index=list(THEMES.keys()).index(st.session_state["theme_name"]),
+        horizontal=True,
+        key="_theme_radio",
+    )
+    if _theme_choice != st.session_state["theme_name"]:
+        st.session_state["theme_name"] = _theme_choice
+        st.rerun()
 
     st.markdown("---")
     analysis_mode = st.radio(
@@ -829,6 +1222,8 @@ if analysis_mode == "\u26a1 Live Analysis":
             st.rerun()
 
     if analyze_clicked and live_text.strip():
+        _live_race = st.empty()
+        _live_race.markdown(_racing_stickmen_html(), unsafe_allow_html=True)
         try:
             live_report: AuditReport = audit_conversation(
                 raw_text=live_text,
@@ -838,6 +1233,7 @@ if analysis_mode == "\u26a1 Live Analysis":
                 overlap=10,
                 conversation_id="live_session",
             )
+            _live_race.empty()
 
             # Compute operator load for this snapshot
             result_dict = {
@@ -992,6 +1388,7 @@ if analysis_mode == "\u26a1 Live Analysis":
                             st.markdown(f"- **T{f.turn}** [sev {f.severity}]: {f.description[:120]}")
 
         except Exception as exc:
+            _live_race.empty()
             st.error(f"Analysis error: {exc}")
 
 
@@ -1002,6 +1399,9 @@ elif analysis_mode == "\U0001f4ca Regression":
     st.markdown("## \U0001f4ca Regression Analysis")
     st.caption("Statistical patterns across 512 audited conversations — conversation length vs OLI, "
                "instruction count vs drift, model vs correction failure rate.")
+
+    _reg_race = st.empty()
+    _reg_race.markdown(_racing_stickmen_html(), unsafe_allow_html=True)
 
     # Load batch data
     batch_data = []
@@ -1018,6 +1418,8 @@ elif analysis_mode == "\U0001f4ca Regression":
                     batch_data.append(r)
             except Exception:
                 pass
+
+    _reg_race.empty()
 
     if not batch_data:
         st.warning("No batch results found. Run `batch_audit.py` and/or `batch_audit_chatgpt.py` first.")
@@ -1268,7 +1670,7 @@ else:
         conv_id = "sample_conversation.txt"
 
     if raw_bytes is None:
-        st.markdown("## \U0001f4e1 Drift Auditor")
+        st.markdown("## \U0001f9ea Drift Auditor")
         st.markdown(
             "Upload a Claude conversation export or **load the sample** from the sidebar "
             "to analyze multi-turn drift patterns."
@@ -1281,13 +1683,19 @@ else:
     # Run audit
     # ---------------------------------------------------------------------------
 
+    race_placeholder = st.empty()
+    race_placeholder.markdown(_racing_stickmen_html(), unsafe_allow_html=True)
+
     try:
         report: AuditReport = run_audit(
             raw_bytes, system_prompt, preferences, window_size, overlap, conv_id
         )
     except Exception as exc:
+        race_placeholder.empty()
         st.error(f"Unable to audit this conversation: {exc}")
         st.stop()
+
+    race_placeholder.empty()
 
     if report.total_turns == 0:
         st.error("Could not parse any turns from the uploaded file. Supported formats: Claude.ai JSON export, plain text with Human:/Assistant: markers.")
@@ -1300,18 +1708,14 @@ else:
     # Dashboard — Summary metrics
     # ---------------------------------------------------------------------------
 
-    st.markdown("## \U0001f4e1 Drift Audit Results")
+    st.markdown("## \U0001f9ea Drift Audit Results")
 
-    # Hero metric row
+    # Hero row — Flask + layer scores
+    overall = scores.get("overall_drift_score", 1)
     hero_col, c1, c2, c3, c4 = st.columns([1.6, 1, 1, 1, 1])
 
     with hero_col:
-        overall = scores.get("overall_drift_score", 1)
-        render_metric_card(
-            "Overall Drift", overall,
-            score_label(overall),
-            hero=True,
-        )
+        st.markdown(build_drift_flask_html(overall), unsafe_allow_html=True)
 
     LAYER_METRICS = [
         ("L1: Commission", "commission_score", lambda s: f"{s.get('commission_flag_count', 0)} flags"),
@@ -1326,33 +1730,82 @@ else:
         with col:
             render_metric_card(label, scores.get(key, 1), subtitle_fn(scores))
 
-    # Structural score row
+    # Structural score row — all in glass cards
     st.markdown("")
     struct_col, void_col, conflict_col, shadow_col, op_col = st.columns(5)
     with struct_col:
         render_metric_card("Structural", scores.get("structural_score", 1),
-                           f"composite of new detectors")
+                           "composite of new detectors")
     with void_col:
-        st.metric("Void Events", scores.get("void_events_count", 0))
+        _v = scores.get("void_events_count", 0)
+        st.markdown(f"""<div class="glass-card" style="text-align:center;">
+            <div class="metric-label">Void Events</div>
+            <div class="metric-value" style="color:{T['accent']}">{_v}</div>
+        </div>""", unsafe_allow_html=True)
     with conflict_col:
-        st.metric("Conflict Pairs", scores.get("conflict_pairs_count", 0))
+        _v = scores.get("conflict_pairs_count", 0)
+        st.markdown(f"""<div class="glass-card" style="text-align:center;">
+            <div class="metric-label">Conflict Pairs</div>
+            <div class="metric-value" style="color:{T['accent']}">{_v}</div>
+        </div>""", unsafe_allow_html=True)
     with shadow_col:
-        st.metric("Shadow Patterns", scores.get("shadow_patterns_count", 0))
+        _v = scores.get("shadow_patterns_count", 0)
+        st.markdown(f"""<div class="glass-card" style="text-align:center;">
+            <div class="metric-label">Shadow Patterns</div>
+            <div class="metric-value" style="color:{T['accent']}">{_v}</div>
+        </div>""", unsafe_allow_html=True)
     with op_col:
         effective = scores.get("op_moves_effective", 0)
         total_moves = scores.get("op_moves_total", 0)
-        st.metric("Operator Moves", f"{effective}/{total_moves} effective")
+        st.markdown(f"""<div class="glass-card" style="text-align:center;">
+            <div class="metric-label">Operator Moves</div>
+            <div class="metric-value" style="color:{T['accent']}">{effective}/{total_moves}</div>
+            <div class="metric-sub">effective</div>
+        </div>""", unsafe_allow_html=True)
 
-    # Stats row
+    # Stats row — all in glass cards
     st.markdown("")
     s1, s2, s3, s4, s5, s6 = st.columns(6)
-    s1.metric("Total Turns", report.total_turns)
-    s2.metric("Instructions", report.instructions_extracted)
-    s3.metric("Total Flags", scores.get("commission_flag_count", 0) + scores.get("omission_flag_count", 0))
-    s4.metric("Corrections", scores.get("correction_events_total", 0))
-    s5.metric("Instrs Active", scores.get("instructions_active", 0))
-    s6.metric("Instrs Dropped", scores.get("instructions_omitted", 0))
+    _stats = [
+        (s1, "Total Turns", report.total_turns),
+        (s2, "Instructions", report.instructions_extracted),
+        (s3, "Total Flags", scores.get("commission_flag_count", 0) + scores.get("omission_flag_count", 0)),
+        (s4, "Corrections", scores.get("correction_events_total", 0)),
+        (s5, "Instrs Active", scores.get("instructions_active", 0)),
+        (s6, "Instrs Dropped", scores.get("instructions_omitted", 0)),
+    ]
+    for col, label, val in _stats:
+        with col:
+            st.markdown(f"""<div class="glass-card" style="text-align:center;">
+                <div class="metric-label">{label}</div>
+                <div class="metric-value" style="color:{T['text']}; font-size:2rem;">{val}</div>
+            </div>""", unsafe_allow_html=True)
 
+
+    # ---------------------------------------------------------------------------
+    # Frustration Index  (experimental — operator sentiment proxy)
+    # ---------------------------------------------------------------------------
+
+    raw_text_for_frustration = raw_bytes.decode("utf-8", errors="ignore")
+    from parsers.chat_parser import parse_chat_log as _parse_for_frustration
+    _transcript = _parse_for_frustration(raw_text_for_frustration)
+    frustration = compute_frustration_index(_transcript)
+
+    if frustration.per_turn:
+        st.markdown("---")
+        st.subheader("\U0001f9ea Frustration Index")
+        st.caption("Experimental proxy — operator message sentiment (keyword + VADER).")
+
+        frust_gauge_col, frust_chart_col = st.columns([1, 3])
+
+        with frust_gauge_col:
+            st.markdown(build_frustration_gauge(frustration), unsafe_allow_html=True)
+
+        with frust_chart_col:
+            frust_fig = build_frustration_line_fig(frustration)
+            if frust_fig is not None:
+                st.plotly_chart(frust_fig, use_container_width=True, config={"displaylogo": False})
+                chart_export_png(frust_fig, f"frustration_{report.conversation_id}.png", "Download Frustration PNG")
 
     # ---------------------------------------------------------------------------
     # Drift Timeline

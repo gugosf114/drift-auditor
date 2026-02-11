@@ -35,6 +35,7 @@ dashboard = [
     "plotly>=5.18.0",
     "pandas>=2.0.0",
     "kaleido>=0.2.1",
+    "vaderSentiment>=3.3.2",
 ]
 semantic = [
     "sentence-transformers>=2.2.0",

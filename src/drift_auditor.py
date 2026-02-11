@@ -78,6 +78,7 @@ from detectors.structural import (
     detect_conflict_pairs,
     detect_shadow_patterns,
 )
+from detectors.frustration import compute_frustration_index, FrustrationResult
 
 # --- Utilities ---
 from utils import (
