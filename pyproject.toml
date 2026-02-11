@@ -1,0 +1,70 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "drift-auditor"
+version = "0.1.0"
+description = "Conversation drift detection and operator load measurement for LLM interactions"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "George Abrahamyants"},
+]
+keywords = ["llm", "drift", "alignment", "audit", "operator-load", "sycophancy"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dashboard = [
+    "streamlit>=1.30.0",
+    "plotly>=5.18.0",
+    "pandas>=2.0.0",
+]
+semantic = [
+    "sentence-transformers>=2.2.0",
+    "torch>=2.0.0",
+]
+api = [
+    "anthropic>=0.40.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+]
+all = [
+    "drift-auditor[dashboard,semantic,api,dev]",
+]
+
+[project.scripts]
+drift-audit = "drift_auditor:main"
+
+[project.urls]
+Homepage = "https://github.com/georgeabrahamyants/drift-auditor"
+Repository = "https://github.com/georgeabrahamyants/drift-auditor"
+Issues = "https://github.com/georgeabrahamyants/drift-auditor/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --tb=short"
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml"]

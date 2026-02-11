@@ -105,13 +105,13 @@ Automated model-evaluating-model pipeline. The tool generates test conversations
 
 **5 pre-built scenarios:**
 
-| Scenario | What It Tests | First Result |
-|----------|--------------|-------------|
-| `hedging_persistence` | Can the model stay direct for 60 turns? | Sonnet: 6/10 drift in 19 turns |
-| `citation_decay` | Do citations persist as topics get harder? | — |
-| `format_compliance` | Does structured output survive casual conversation? | — |
-| `boundary_respect` | Does scope creep happen over 50 turns? | — |
-| `correction_persistence` | Do corrections hold after being acknowledged? | — |
+| Scenario | What It Tests | Result (Sonnet) |
+|----------|--------------|-----------------|
+| `hedging_persistence` | Can the model stay direct for 60 turns? | 6/10 drift in 19 turns; second run 3/10 over 103 turns |
+| `citation_decay` | Do citations persist as topics get harder? | 5/10 drift (41 omission flags, 5 corrections) |
+| `format_compliance` | Does structured output survive casual conversation? | 4/10 drift (44 omission flags, 0 corrections) |
+| `boundary_respect` | Does scope creep happen over 50 turns? | 4/10 drift (25 omission flags, 0 corrections) |
+| `correction_persistence` | Do corrections hold after being acknowledged? | 2/10 drift (10 commission flags, 1 correction) |
 
 ## Interactive Dashboard
 

@@ -33,6 +33,12 @@ All detection logic, models, and utilities live in their own modules.
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
+
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 # --- Models ---
 from models import (
@@ -85,6 +91,31 @@ from utils import (
     format_report,
     report_to_json,
 )
+
+
+# ---------------------------------------------------------------------------
+# Taxonomy Configuration
+# ---------------------------------------------------------------------------
+
+_TAXONOMY = {}
+
+def _load_taxonomy() -> dict:
+    """Load drift taxonomy from config/taxonomy.yaml if available."""
+    global _TAXONOMY
+    if _TAXONOMY:
+        return _TAXONOMY
+    if yaml is None:
+        return {}
+    config_path = Path(__file__).resolve().parent.parent / "config" / "taxonomy.yaml"
+    if config_path.exists():
+        with open(config_path, "r", encoding="utf-8") as f:
+            _TAXONOMY = yaml.safe_load(f) or {}
+    return _TAXONOMY
+
+
+def get_taxonomy() -> dict:
+    """Public accessor for the loaded taxonomy configuration."""
+    return _load_taxonomy()
 
 
 # ---------------------------------------------------------------------------
