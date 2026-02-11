@@ -311,9 +311,8 @@ def render_metric_card(label: str, score: int, subtitle: str, hero: bool = False
     color = score_color(score)
     card_cls = "glass-card-hero" if hero else "glass-card"
     val_cls = "metric-value-hero" if hero else "metric-value"
-    shadow = f"0 0 20px {color}25" if hero else "none"
     st.markdown(f"""
-    <div class="{card_cls}" style="box-shadow: {shadow}">
+    <div class="{card_cls}">
         <div class="metric-label">{label}</div>
         <div class="{val_cls}" style="color: {color}">{score}</div>
         <div class="metric-sub">{subtitle}</div>
@@ -443,7 +442,7 @@ def build_timeline_fig(report: AuditReport) -> go.Figure:
             y=[f.severity for f in report.commission_flags],
             mode="markers",
             name="Commission",
-            marker=dict(size=11, color="#ef4444", symbol="diamond", line=dict(width=1, color="#ef444480")),
+            marker=dict(size=11, color="#ef4444", symbol="diamond", line=dict(width=1, color="rgba(239,68,68,0.5)")),
             hovertext=[f"T{f.turn}: {f.description[:60]}" for f in report.commission_flags],
             hoverinfo="text",
         ))
@@ -455,7 +454,7 @@ def build_timeline_fig(report: AuditReport) -> go.Figure:
             y=[f.severity for f in report.omission_flags],
             mode="markers",
             name="Omission",
-            marker=dict(size=11, color="#f59e0b", symbol="triangle-up", line=dict(width=1, color="#f59e0b80")),
+            marker=dict(size=11, color="#f59e0b", symbol="triangle-up", line=dict(width=1, color="rgba(245,158,11,0.5)")),
             hovertext=[f"T{f.turn}: {f.description[:60]}" for f in report.omission_flags],
             hoverinfo="text",
         ))
@@ -853,7 +852,7 @@ def build_frustration_gauge(result: FrustrationResult) -> str:
                 height: {pct}%;
                 background: {bar_color};
                 border-radius: 0 0 18px 18px;
-                box-shadow: 0 0 12px {glow}40;
+                box-shadow: 0 0 12px {glow};
                 transition: height 0.5s ease;
             "></div>
         </div>
@@ -1060,6 +1059,68 @@ def build_drift_flask_html(score: int) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Spark Ideas — interesting moments from the audit
+# ---------------------------------------------------------------------------
+
+def generate_spark_ideas(report: AuditReport, frustration: "FrustrationResult | None" = None) -> list[str]:
+    """Extract interesting/notable moments from the audit for display."""
+    sparks = []
+    scores = report.summary_scores
+
+    # Highest severity flag
+    all_flags = report.commission_flags + report.omission_flags
+    if all_flags:
+        worst = max(all_flags, key=lambda f: f.severity)
+        sparks.append(f"Highest drift event at **turn {worst.turn}** (severity {worst.severity}/10): _{worst.description[:80]}_")
+
+    # Correction battles
+    failed_corrections = [e for e in report.correction_events if not e.held]
+    if failed_corrections:
+        sparks.append(f"Operator corrected the model **{len(report.correction_events)}** times — "
+                      f"**{len(failed_corrections)}** corrections were ignored.")
+
+    # Void events (model went blank)
+    if report.void_events:
+        void_turns = [v.turn for v in report.void_events]
+        sparks.append(f"Model produced **{len(report.void_events)} void responses** "
+                      f"(near-empty output) at turns {', '.join(str(t) for t in void_turns[:5])}.")
+
+    # Frustration spike
+    if frustration and frustration.peak > 5.0:
+        sparks.append(f"Operator frustration peaked at **{frustration.peak:.1f}/10** "
+                      f"on turn {frustration.peak_turn}.")
+
+    # Frustration trend
+    if frustration and frustration.trend == "rising":
+        sparks.append("Operator frustration was **rising** throughout the conversation.")
+
+    # Shadow patterns (model doing things it wasn't asked to)
+    if report.shadow_patterns:
+        sparks.append(f"Detected **{len(report.shadow_patterns)} shadow patterns** — "
+                      f"model exhibited behavior not requested by the operator.")
+
+    # Conflict pairs
+    if report.conflict_pairs:
+        sparks.append(f"Found **{len(report.conflict_pairs)} conflicting instruction pairs** — "
+                      f"model received contradictory directives.")
+
+    # Instruction survival
+    active = scores.get("instructions_active", 0)
+    omitted = scores.get("instructions_omitted", 0)
+    total_instr = active + omitted
+    if total_instr > 0 and omitted > 0:
+        survival_pct = round(active / total_instr * 100)
+        sparks.append(f"Only **{survival_pct}%** of instructions survived to the end "
+                      f"({active}/{total_instr} still active).")
+
+    # Clean conversation
+    if not sparks:
+        sparks.append("This conversation showed minimal drift. The model held alignment well.")
+
+    return sparks
+
+
+# ---------------------------------------------------------------------------
 # Cached audit function
 # ---------------------------------------------------------------------------
 
@@ -1092,19 +1153,6 @@ with st.sidebar:
     st.markdown("## \U0001f9ea Drift Auditor")
     st.caption("Multi-turn drift diagnostic tool")
 
-    # Theme selector — radio buttons, no dropdown
-    _theme_choice = st.radio(
-        "Theme",
-        list(THEMES.keys()),
-        index=list(THEMES.keys()).index(st.session_state["theme_name"]),
-        horizontal=True,
-        key="_theme_radio",
-    )
-    if _theme_choice != st.session_state["theme_name"]:
-        st.session_state["theme_name"] = _theme_choice
-        st.rerun()
-
-    st.markdown("---")
     analysis_mode = st.radio(
         "Mode",
         ["\U0001f4c1 File Analysis", "\u26a1 Live Analysis", "\U0001f4ca Regression"],
@@ -1164,6 +1212,21 @@ with st.sidebar:
         preferences = ""
         window_size = 50
         overlap = 10
+
+    # Theme — tucked at bottom in expander
+    st.markdown("---")
+    with st.expander("Theme", expanded=False):
+        _theme_choice = st.radio(
+            "Pick theme",
+            list(THEMES.keys()),
+            index=list(THEMES.keys()).index(st.session_state["theme_name"]),
+            horizontal=True,
+            key="_theme_radio",
+            label_visibility="collapsed",
+        )
+        if _theme_choice != st.session_state["theme_name"]:
+            st.session_state["theme_name"] = _theme_choice
+            st.rerun()
 
 
 # ===================================================================
@@ -1710,12 +1773,12 @@ else:
 
     st.markdown("## \U0001f9ea Drift Audit Results")
 
-    # Hero row — Flask + layer scores
+    # Top metric row — all equal width
     overall = scores.get("overall_drift_score", 1)
-    hero_col, c1, c2, c3, c4 = st.columns([1.6, 1, 1, 1, 1])
+    hero_col, c1, c2, c3, c4 = st.columns(5)
 
     with hero_col:
-        st.markdown(build_drift_flask_html(overall), unsafe_allow_html=True)
+        render_metric_card("Overall Drift", overall, score_label(overall))
 
     LAYER_METRICS = [
         ("L1: Commission", "commission_score", lambda s: f"{s.get('commission_flag_count', 0)} flags"),
@@ -1806,6 +1869,18 @@ else:
             if frust_fig is not None:
                 st.plotly_chart(frust_fig, use_container_width=True, config={"displaylogo": False})
                 chart_export_png(frust_fig, f"frustration_{report.conversation_id}.png", "Download Frustration PNG")
+
+    # ---------------------------------------------------------------------------
+    # Spark Ideas — interesting moments
+    # ---------------------------------------------------------------------------
+
+    sparks = generate_spark_ideas(report, frustration if frustration.per_turn else None)
+    if sparks:
+        st.markdown("---")
+        st.subheader("\u2728 Spark Ideas")
+        st.caption("Notable moments and patterns from this conversation.")
+        for spark in sparks:
+            st.markdown(f"- {spark}")
 
     # ---------------------------------------------------------------------------
     # Drift Timeline
