@@ -23,7 +23,6 @@ Per-instruction lifecycle tracking with coupling scores.
 Edge vs. middle positional analysis.
 
 Author: George Abrahamyants
-Built for Anthropic Claude Hackathon, February 2026
 Built with Claude Code + Cursor (Opus 4.6)
 
 Refactored into modular structure. This file is the thin orchestrator.

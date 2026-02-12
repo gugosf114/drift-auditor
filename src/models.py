@@ -45,7 +45,7 @@ class DriftTag(str, Enum):
 # 12-Rule Operator System
 # ---------------------------------------------------------------------------
 # Classifies the HUMAN's corrective actions. Derived from real interactions.
-# The hackathon tool uses both systems: tags identify what the model did wrong,
+# The tool uses both systems: tags identify what the model did wrong,
 # rules identify what the operator did to catch or correct it.
 
 class OperatorRule(str, Enum):

@@ -32,7 +32,6 @@ alwaysApply: true
 - Exploration that fails is fine if effort was real.
 
 ## Technical
-- This is a hackathon project (Anthropic Claude Hackathon, Feb 10-16 2026).
 - Built with Claude Code + Cursor 50/50.
 - Python backend, Streamlit frontend.
 - The tool detects omission drift in LLM conversations — instructions the model silently stops following.

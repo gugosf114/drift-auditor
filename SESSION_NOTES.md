@@ -12,14 +12,13 @@ Key finding: Claude and ChatGPT tie on drift score (2.9 vs 3.0) but diverge on f
 
 First adversarial test: Sonnet scored 6/10 drift in 19 turns on hedging persistence. Auto-generated contradiction at turn 10.
 
-GitHub: 22 commits on gugosf114/drift-auditor. Hackathon application submitted.
+GitHub: 22 commits on gugosf114/drift-auditor.
 
 ## Next Session Priorities
 1. Verify Streamlit deployment shows updated UI + leaderboard
 2. Run more adversarial test scenarios (API key in env var, anthropic package installed)
 3. Add Operator Load metrics to the Streamlit dashboard
-4. Polish anything for judges
-5. Hackathon deadline: Feb 16, 2026
+4. Polish UI and documentation
 
 ## Context Files
 - Brain farts: C:\Users\georg\Desktop\Claude_Context\

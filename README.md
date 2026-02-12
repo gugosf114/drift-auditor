@@ -224,9 +224,5 @@ Source research: "12 Rules for AI: An Operator's Field Manual" (29 pages, 17 aca
 - Adversarial test generator requires Anthropic API key and is subject to rate limits.
 - Parser handles common formats but may need extension for unusual transcript structures.
 
-## Built For
-
-Anthropic Claude Hackathon (February 10–16, 2026)
-
 **Author**: George Abrahamyants
 **Built with**: Claude Code + Cursor (Opus 4.6)
