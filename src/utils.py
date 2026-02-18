@@ -74,14 +74,18 @@ def compute_coupling_score(instruction: Instruction, all_instructions: list) -> 
         score += 0.15
 
     # Cross-reference: if other instructions share keywords, this one is coupled
+    # Capped at 0.15 total so the bonus can't saturate in long conversations
+    # with many instructions sharing common vocabulary.
     inst_words = set(w.lower() for w in instruction.text.split() if len(w) > 4)
+    cross_ref_bonus = 0.0
     for other in all_instructions:
         if other.text == instruction.text:
             continue
         other_words = set(w.lower() for w in other.text.split() if len(w) > 4)
         overlap = inst_words & other_words
         if len(overlap) >= 2:
-            score += 0.05  # Each cross-reference adds a small coupling bonus
+            cross_ref_bonus += 0.05
+    score += min(0.15, cross_ref_bonus)
 
     return min(1.0, score)
 
@@ -476,7 +480,7 @@ def format_report(report: AuditReport) -> str:
     lines = []
     lines.append("=" * 70)
     lines.append("OMISSION DRIFT DIAGNOSTIC REPORT")
-    lines.append("10-Tag Taxonomy | 12-Rule Operator System | 6 Detection Methods")
+    lines.append("10-Tag Taxonomy | 12-Rule Operator System | 18+ Detection Methods")
     lines.append("=" * 70)
     lines.append(f"Conversation: {report.conversation_id}")
     lines.append(f"Total turns: {report.total_turns}")

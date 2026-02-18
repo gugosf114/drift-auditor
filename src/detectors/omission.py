@@ -217,10 +217,10 @@ def detect_omission_local(turns: list[dict], instructions: list[Instruction],
                 # Extract what they shouldn't do
                 prohibited = re.sub(r"^.*?(?:don'?t|do not|never|stop|no more)\s+", "", inst_lower)
                 if prohibited and len(prohibited) > 5:
-                    # Check if the prohibited behavior appears in response
-                    # This is commission detection of a specific instruction violation
+                    # Require at least 2 key terms to avoid single-word false-positives
+                    # e.g. "don't hedge" → key_terms=["hedge"] → too ambiguous to flag
                     key_terms = [w for w in prohibited.split() if len(w) > 3][:3]
-                    if key_terms and all(term in content for term in key_terms):
+                    if len(key_terms) >= 2 and all(term in content for term in key_terms):
                         flags.append(DriftFlag(
                             layer="omission",
                             turn=turn_num,
@@ -383,9 +383,17 @@ def detect_contrastive_drift(turns: list[dict], instructions: list[Instruction])
         late_ratio = late_hits / len(key_terms) if key_terms else 0
 
         if early_ratio >= 0.4 and late_ratio < 0.2:
+            # Find the first late turn where the instruction key terms go absent,
+            # rather than always pinning to late_turns[0].
+            drift_turn = late_turns[0]["turn"]
+            for lt in late_turns:
+                lt_hits = sum(1 for term in key_terms if term in lt["content"].lower())
+                if lt_hits / len(key_terms) < 0.2:
+                    drift_turn = lt["turn"]
+                    break
             flags.append(DriftFlag(
                 layer="contrastive",
-                turn=late_turns[0]["turn"],
+                turn=drift_turn,
                 severity=6,
                 description=f"Contrastive drift: instruction present early, absent late",
                 instruction_ref=inst.text,

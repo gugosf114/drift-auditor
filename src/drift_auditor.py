@@ -34,6 +34,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+# Ensure src/ is on sys.path when the script is run directly
+# (e.g. `python src/drift_auditor.py` or `python drift_auditor.py` from inside src/).
+# When installed via `pip install -e .`, setuptools handles this automatically.
+_SRC_DIR = Path(__file__).resolve().parent
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+
 try:
     import yaml
 except ImportError:
@@ -138,18 +145,19 @@ def audit_conversation(
       2. Extract instruction set (baseline) + assign IDs + coupling scores
       3. Layer 4: Barometer (runs first — feeds Layer 2)
       4. Layer 1: Commission per window
-      5. Layer 2: Omission per window (with barometer cross-layer)
+      5. Layer 2: Omission per window — local heuristics + API semantic detection
+         (API detection runs when ANTHROPIC_API_KEY is set)
       6. Layer 3: Correction persistence (full conversation)
-      7. NEW: Operator move detection (Tag 9 / 12-rule system)
-      8. NEW: Conflict pair detection (Tag 7)
-      9. NEW: Shadow pattern detection (Tag 8)
-     10. NEW: Contrastive anchoring (6a)
-     11. NEW: Void detection (6b)
-     12. NEW: Undeclared unresolved (6c)
-     13. NEW: False equivalence detection (6e)
-     14. NEW: Pre-drift signal detection (6f)
-     15. NEW: Instruction lifecycle tracking
-     16. NEW: Edge vs. middle positional analysis (6d)
+      7. Operator move detection (Tag 9 / 12-rule system)
+      8. Conflict pair detection (Tag 7)
+      9. Shadow pattern detection (Tag 8)
+     10. Contrastive anchoring (6a)
+     11. Void detection (6b)
+     12. Undeclared unresolved (6c)
+     13. False equivalence detection (6e)
+     14. Pre-drift signal detection (6f)
+     15. Instruction lifecycle tracking
+     16. Edge vs. middle positional analysis (6d)
      17. Aggregate and score
 
     Window size of 50 turns with 10-turn overlap prevents the auditor
@@ -214,6 +222,21 @@ def audit_conversation(
             if start <= s.turn < end
         ]
         omission_flags = detect_omission_local(window, active_instructions, window_barometer)
+
+        # Layer 2 (API): Semantic omission detection — runs when ANTHROPIC_API_KEY
+        # is set. One call per (instruction, response) pair in this window.
+        # This is the real semantic detector; local heuristics are the fallback.
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key:
+            for turn in window:
+                if turn["role"] != "assistant":
+                    continue
+                for inst in active_instructions:
+                    api_flag = detect_omission_api(turn["content"], inst.text, api_key)
+                    if api_flag is not None:
+                        api_flag.turn = turn["turn"]
+                        omission_flags.append(api_flag)
+
         for f in omission_flags:
             f.tag = f.tag or DriftTag.INSTRUCTION_DROP.value
             dedup_key = (f.layer, f.turn, f.description)
@@ -230,8 +253,6 @@ def audit_conversation(
         if not event.held:
             event.tag = DriftTag.CORRECTION_DECAY.value
     report.correction_events = correction_events
-
-    # --- NEW DETECTION SYSTEMS ---
 
     # Tag 9: Operator move detection (12-rule system)
     report.op_moves = detect_operator_moves(turns)
@@ -262,8 +283,6 @@ def audit_conversation(
 
     # 6f: Pre-drift signal detection
     report.pre_drift_signals = detect_pre_drift_signals(turns)
-
-    # --- 12-RULES DETECTION METHODS ---
 
     # Criteria Lock (Rule 1 derivative)
     criteria_lock_flags = detect_criteria_lock(turns)
@@ -301,7 +320,7 @@ def audit_conversation(
 
     # Oracle Counterfactual (AEGIS Layer 9) — classify all flags
     for f in report.commission_flags + report.omission_flags:
-        if not hasattr(f, 'counterfactual') or True:
+        if not hasattr(f, 'counterfactual') or f.counterfactual is None:
             f.counterfactual = classify_preventable_vs_systemic(f, instructions)
 
     # Instruction lifecycle tracking
