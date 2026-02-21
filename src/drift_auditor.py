@@ -4,10 +4,13 @@ Drift Auditor — Entry Point
 Thin dispatcher (~80 lines). All logic lives in ui/modes/.
 """
 import os
+from datetime import datetime
+from pathlib import Path
 
-import streamlit as st
-
-from ui.theme import THEMES, _build_css
+try:
+    import yaml
+except ImportError:
+    yaml = None
 
 # --- Models ---
 from models import (
