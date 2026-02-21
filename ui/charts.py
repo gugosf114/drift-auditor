@@ -369,18 +369,8 @@ def build_frustration_gauge(result, t: dict) -> str:
     avg = result.average
     pct = min(100, max(0, avg * 10))
 
-    if avg <= 3:
-        bar_color = t["green"]
-        glow = t["green"]
-    elif avg <= 5:
-        bar_color = t["accent"]
-        glow = t["accent"]
-    elif avg <= 7:
-        bar_color = t["red"]
-        glow = t["red"]
-    else:
-        bar_color = t["deep_red"]
-        glow = t["deep_red"]
+    bar_color = score_color(avg, t)
+    glow = bar_color
 
     trend_icon = {"rising": "\u2191", "falling": "\u2193", "spike": "\u26a1", "stable": "\u2014"}.get(
         result.trend, "\u2014"
@@ -431,16 +421,7 @@ def build_frustration_line_fig(result, t: dict) -> go.Figure | None:
     fig.add_hrect(y0=5, y1=7, fillcolor=t["red"], opacity=0.05, line_width=0)
     fig.add_hrect(y0=7, y1=10, fillcolor=t["deep_red"], opacity=0.05, line_width=0)
 
-    colors = []
-    for s in result.per_turn:
-        if s <= 3:
-            colors.append(t["green"])
-        elif s <= 5:
-            colors.append(t["accent"])
-        elif s <= 7:
-            colors.append(t["red"])
-        else:
-            colors.append(t["deep_red"])
+    colors = [score_color(s, t) for s in result.per_turn]
 
     fig.add_trace(go.Scatter(
         x=result.turn_indices,
