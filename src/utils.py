@@ -101,6 +101,21 @@ def coupling_label(score: float) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Instruction Activity Helper
+# ---------------------------------------------------------------------------
+
+def instruction_is_active(inst: Instruction, turn_num: int) -> bool:
+    """Return True if an instruction is active at the given turn."""
+    if not inst.active:
+        return False
+    if inst.turn_introduced > turn_num:
+        return False
+    if inst.superseded_at is not None and inst.superseded_at <= turn_num:
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
 # 6d. Edge vs. Middle Hypothesis
 # ---------------------------------------------------------------------------
 
@@ -298,14 +313,20 @@ def build_instruction_lifecycles(
         else:
             position = "middle"
 
-        # Track presence across assistant turns
+        # Track presence across assistant turns (bounded by supersede if set)
         key_terms = [w.lower() for w in inst.text.split() if len(w) > 4][:4]
+
+        end_turn = inst.superseded_at if inst.superseded_at is not None else None
+        scoped_assistant_turns = [
+            t for t in assistant_turns
+            if t["turn"] < (end_turn if end_turn is not None else total_turns)
+        ]
 
         turn_last_followed = None
         turn_first_omitted = None
         consecutive_misses = 0
 
-        for t in assistant_turns:
+        for t in scoped_assistant_turns:
             if t["turn"] < inst.turn_introduced:
                 continue
 
@@ -322,7 +343,7 @@ def build_instruction_lifecycles(
                     turn_first_omitted = t["turn"]
 
         # Determine status
-        if not inst.active:
+        if inst.superseded_at is not None:
             status = "superseded"
         elif turn_first_omitted is not None:
             status = "omitted"

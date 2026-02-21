@@ -155,7 +155,11 @@ def audit_conversation(
         end = min(start + window_size, len(turns))
         window = turns[start:end]
 
-        active_instructions = [inst for inst in instructions if inst.active]
+        active_instructions = [
+            inst for inst in instructions
+            if inst.active and inst.turn_introduced < end and
+               (inst.superseded_at is None or inst.superseded_at > start)
+        ]
         window_barometer = [s for s in report.barometer_signals if start <= s.turn < end]
 
         for detector in window_detectors:

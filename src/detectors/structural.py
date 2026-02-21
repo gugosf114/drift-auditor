@@ -509,6 +509,8 @@ def detect_voids(turns: list[dict], instructions: list[Instruction]) -> list[Voi
         if not inst.active:
             continue
 
+        end_turn = inst.superseded_at if inst.superseded_at is not None else None
+
         chain = {
             "given": True,  # Always true -- we extracted it
             "acknowledged": False,
@@ -521,7 +523,11 @@ def detect_voids(turns: list[dict], instructions: list[Instruction]) -> list[Voi
             continue
 
         # Check acknowledgment (first few assistant turns after instruction)
-        turns_after = [t for t in assistant_turns if t["turn"] > inst.turn_introduced]
+        turns_after = [
+            t for t in assistant_turns
+            if t["turn"] > inst.turn_introduced and
+               (end_turn is None or t["turn"] < end_turn)
+        ]
 
         # Acknowledged = key terms appear in response shortly after instruction
         for t in turns_after[:3]:

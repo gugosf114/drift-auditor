@@ -76,6 +76,7 @@ class Instruction:
     turn_introduced: int # Turn number where it appeared (0 = pre-conversation)
     active: bool = True  # Whether it's been superseded
     instruction_id: str = ""  # Unique ID for lifecycle tracking
+    superseded_at: Optional[int] = None  # Turn where it was superseded (if any)
 
 @dataclass
 class DriftFlag:
@@ -199,6 +200,8 @@ class AuditReport:
                     self.commission_flags.append(flag)
                 elif flag.layer == "omission":
                     self.omission_flags.append(flag)
+                elif flag.layer == "pre_drift":
+                    self.pre_drift_signals.append(flag)
                 else:
                     # Default to omission if layer is unknown
                     self.omission_flags.append(flag)

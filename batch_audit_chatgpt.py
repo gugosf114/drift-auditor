@@ -21,59 +21,55 @@ def chatgpt_conv_to_messages(conv: dict) -> list[dict]:
     if not mapping:
         return []
     
-    # Build parent->children index
-    children_map = {}
-    root_id = None
-    for node_id, node in mapping.items():
-        parent = node.get('parent')
-        if parent is None:
-            root_id = node_id
-        else:
-            if parent not in children_map:
-                children_map[parent] = []
-            children_map[parent].append(node_id)
-    
-    if root_id is None:
+    current_id = conv.get("current_node")
+    if not current_id or current_id not in mapping:
+        # Fall back to root if current_node is missing
+        current_id = next((nid for nid, n in mapping.items() if n.get("parent") is None), None)
+    if current_id is None:
         return []
-    
-    # Walk the tree linearly (follow first child at each level)
-    messages = []
-    current = root_id
+
+    # Walk parent chain from current_node to root, then reverse for order
+    path = []
     visited = set()
-    
-    while current and current not in visited:
-        visited.add(current)
-        node = mapping.get(current, {})
-        msg = node.get('message')
-        
-        if msg:
-            author = msg.get('author', {}).get('role', 'unknown')
-            content_parts = msg.get('content', {}).get('parts', [])
-            
-            # Flatten parts to text
-            text_parts = []
-            for part in content_parts:
-                if isinstance(part, str) and part.strip():
-                    text_parts.append(part)
-                elif isinstance(part, dict) and part.get('text'):
-                    text_parts.append(part['text'])
-            
-            text = '\n'.join(text_parts).strip()
-            
-            if text and author in ('user', 'assistant'):
-                role = 'user' if author == 'user' else 'assistant'
-                messages.append({
-                    'role': role,
-                    'content': text,
-                    'turn': len(messages),
-                })
-        
-        # Follow to next node (first child, or use current_node path)
-        kids = children_map.get(current, [])
-        if kids:
-            current = kids[0]
-        else:
+    cur = current_id
+    while cur and cur not in visited:
+        visited.add(cur)
+        node = mapping.get(cur)
+        if not node:
             break
+        path.append(cur)
+        cur = node.get("parent")
+    path.reverse()
+
+    messages = []
+    for node_id in path:
+        node = mapping.get(node_id, {})
+        msg = node.get("message")
+        if not msg:
+            continue
+
+        author = msg.get("author", {}).get("role", "unknown")
+        content_parts = msg.get("content", {}).get("parts", [])
+
+        # Flatten parts to text
+        text_parts = []
+        for part in content_parts:
+            if isinstance(part, str) and part.strip():
+                text_parts.append(part)
+            elif isinstance(part, dict) and part.get("text"):
+                text_parts.append(part["text"])
+
+        text = "\n".join(text_parts).strip()
+        if not text:
+            continue
+
+        if author in ("user", "assistant", "system"):
+            role = "user" if author == "user" else "assistant" if author == "assistant" else "system"
+            messages.append({
+                "role": role,
+                "content": text,
+                "turn": len(messages),
+            })
     
     return messages
 

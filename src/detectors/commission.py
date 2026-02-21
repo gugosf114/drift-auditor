@@ -13,10 +13,7 @@ from detectors.base import BaseDetector, DetectorRegistry
 @DetectorRegistry.register_window_detector
 class CommissionDetector(BaseDetector):
     def detect(self, window: list[dict], **kwargs) -> list[DriftFlag]:
-        flags = detect_commission(window)
-        for f in flags:
-            f.tag = f.tag or DriftTag.SYCOPHANCY.value
-        return flags
+        return detect_commission(window)
 
 @DetectorRegistry.register_full_detector
 class FalseEquivalenceDetector(BaseDetector):
@@ -125,7 +122,8 @@ def detect_commission(turns: list[dict]) -> list[DriftFlag]:
                         turn=turn["turn"],
                         severity=severity,
                         description=description,
-                        evidence=matches[0] if matches else None
+                        evidence=matches[0] if matches else None,
+                        tag=DriftTag.SYCOPHANCY.value,
                     ))
 
         # Check reality distortion (not affected by correction context)
@@ -137,7 +135,8 @@ def detect_commission(turns: list[dict]) -> list[DriftFlag]:
                     turn=turn["turn"],
                     severity=base_severity,
                     description=description,
-                    evidence=matches[0] if matches else None
+                    evidence=matches[0] if matches else None,
+                    tag=DriftTag.REALITY_DISTORTION.value,
                 ))
 
     return flags

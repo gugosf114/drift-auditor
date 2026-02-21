@@ -11,6 +11,7 @@ import re
 from typing import Optional
 
 from models import Instruction, DriftFlag, DriftTag, BarometerSignal
+from utils import instruction_is_active
 from detectors.base import BaseDetector, DetectorRegistry
 
 @DetectorRegistry.register_window_detector
@@ -27,6 +28,8 @@ class OmissionDetector(BaseDetector):
                 if turn["role"] != "assistant":
                     continue
                 for inst in active_instructions:
+                    if not instruction_is_active(inst, turn["turn"]):
+                        continue
                     api_flag = detect_omission_api(turn["content"], inst.text, api_key)
                     if api_flag is not None:
                         api_flag.turn = turn["turn"]
@@ -98,31 +101,45 @@ def extract_instructions(turns: list[dict], system_prompt: str = "",
     This is the baseline against which every response is audited.
     """
     instructions = []
+    seen_instructions = set()
+
+    def add_instruction(source: str, text: str, turn_introduced: int) -> None:
+        txt = text.strip()
+        if len(txt) <= 10:
+            return
+        for seen in seen_instructions:
+            if txt in seen or seen in txt:
+                return
+        seen_instructions.add(txt)
+        instructions.append(Instruction(
+            source=source,
+            text=txt,
+            turn_introduced=turn_introduced
+        ))
 
     # System prompt instructions
     if system_prompt:
         for line in system_prompt.split('\n'):
             line = line.strip()
             if len(line) > 15:  # Skip short lines
-                instructions.append(Instruction(
-                    source="system_prompt",
-                    text=line,
-                    turn_introduced=0
-                ))
+                add_instruction("system_prompt", line, 0)
+
+    # System messages embedded in transcript
+    for turn in turns:
+        if turn.get("role") == "system":
+            for line in str(turn.get("content", "")).split('\n'):
+                line = line.strip()
+                if len(line) > 15:
+                    add_instruction("system_prompt", line, turn.get("turn", 0))
 
     # User preferences
     if user_preferences:
         for line in user_preferences.split('\n'):
             line = line.strip()
             if len(line) > 10:
-                instructions.append(Instruction(
-                    source="user_preference",
-                    text=line,
-                    turn_introduced=0
-                ))
+                add_instruction("user_preference", line, 0)
 
     # In-conversation calibrations from user turns
-    seen_instructions = set()
 
     # Intent filter: phrases that indicate the user is talking about
     # themselves, not instructing the model
@@ -157,13 +174,14 @@ def extract_instructions(turns: list[dict], system_prompt: str = "",
             # Try to match superseded instruction by keyword overlap
             content_words = set(w.lower() for w in content.split() if len(w) > 3)
             for inst in instructions:
-                if not inst.active:
+                if inst.turn_introduced >= turn["turn"]:
                     continue
                 inst_words = set(w.lower() for w in inst.text.split() if len(w) > 3)
                 overlap = content_words & inst_words
                 # If significant overlap, likely superseding this instruction
                 if len(overlap) >= 2 or (len(overlap) >= 1 and len(inst_words) <= 5):
-                    inst.active = False
+                    if inst.superseded_at is None or inst.superseded_at > turn["turn"]:
+                        inst.superseded_at = turn["turn"]
 
         for pattern in CALIBRATION_PATTERNS:
             matches = re.findall(pattern, content, re.IGNORECASE)
@@ -247,7 +265,7 @@ def detect_omission_local(turns: list[dict], instructions: list[Instruction],
         # Get instructions active at this turn
         active_instructions = [
             inst for inst in instructions
-            if inst.turn_introduced <= turn_num and inst.active
+            if instruction_is_active(inst, turn_num)
         ]
 
         for inst in active_instructions:
@@ -418,7 +436,7 @@ def detect_contrastive_drift(turns: list[dict], instructions: list[Instruction])
     late_text = " ".join(t["content"].lower() for t in late_turns)
 
     for inst in instructions:
-        if not inst.active:
+        if inst.superseded_at is not None:
             continue
 
         # Extract key terms from instruction
