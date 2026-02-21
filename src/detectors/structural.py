@@ -14,6 +14,48 @@ from models import (
     CorrectionEvent, ConflictPair, ShadowPattern, OpMove, VoidEvent,
     OperatorRule,
 )
+from detectors.base import BaseDetector, DetectorRegistry
+
+@DetectorRegistry.register_full_detector
+class BarometerSignalsDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[BarometerSignal]:
+        return detect_barometer_signals(turns)
+
+@DetectorRegistry.register_full_detector
+class CorrectionPersistenceDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[CorrectionEvent]:
+        events = detect_correction_persistence(turns)
+        for event in events:
+            if not event.held:
+                event.tag = DriftTag.CORRECTION_DECAY.value
+        return events
+
+@DetectorRegistry.register_full_detector
+class OperatorMovesDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[OpMove]:
+        return detect_operator_moves(turns)
+
+@DetectorRegistry.register_full_detector
+class VoidsDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[VoidEvent]:
+        instructions = kwargs.get("instructions", [])
+        return detect_voids(turns, instructions)
+
+@DetectorRegistry.register_full_detector
+class PreDriftSignalsDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        return detect_pre_drift_signals(turns)
+
+@DetectorRegistry.register_full_detector
+class ConflictPairsDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[ConflictPair]:
+        return detect_conflict_pairs(turns)
+
+@DetectorRegistry.register_full_detector
+class ShadowPatternsDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[ShadowPattern]:
+        instructions = kwargs.get("instructions", [])
+        return detect_shadow_patterns(turns, instructions)
 
 # Re-export SYCOPHANCY_MARKERS for correction persistence cross-reference
 from detectors.commission import SYCOPHANCY_MARKERS

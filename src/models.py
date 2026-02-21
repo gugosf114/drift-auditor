@@ -6,7 +6,7 @@ Extracted from drift_auditor.py monolith — no logic changes.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Any
 from enum import Enum
 
 
@@ -177,16 +177,41 @@ class AuditReport:
     conversation_id: str
     total_turns: int
     instructions_extracted: int
-    commission_flags: list = field(default_factory=list)
-    omission_flags: list = field(default_factory=list)
-    correction_events: list = field(default_factory=list)
-    barometer_signals: list = field(default_factory=list)
-    instruction_lifecycles: list = field(default_factory=list)
-    conflict_pairs: list = field(default_factory=list)
-    shadow_patterns: list = field(default_factory=list)
-    op_moves: list = field(default_factory=list)
-    void_events: list = field(default_factory=list)
-    pre_drift_signals: list = field(default_factory=list)
-    positional_analysis: dict = field(default_factory=dict)
-    summary_scores: dict = field(default_factory=dict)
-    metadata: dict = field(default_factory=dict)
+    commission_flags: list[DriftFlag] = field(default_factory=list)
+    omission_flags: list[DriftFlag] = field(default_factory=list)
+    correction_events: list[CorrectionEvent] = field(default_factory=list)
+    barometer_signals: list[BarometerSignal] = field(default_factory=list)
+    instruction_lifecycles: list[InstructionLifecycle] = field(default_factory=list)
+    conflict_pairs: list[ConflictPair] = field(default_factory=list)
+    shadow_patterns: list[ShadowPattern] = field(default_factory=list)
+    op_moves: list[OpMove] = field(default_factory=list)
+    void_events: list[VoidEvent] = field(default_factory=list)
+    pre_drift_signals: list[DriftFlag] = field(default_factory=list)
+    positional_analysis: dict[str, float] = field(default_factory=dict)
+    summary_scores: dict[str, float] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def add_flags(self, flags: list[Any]) -> None:
+        """Route detected flags to the appropriate list based on type or layer."""
+        for flag in flags:
+            if isinstance(flag, DriftFlag):
+                if flag.layer == "commission":
+                    self.commission_flags.append(flag)
+                elif flag.layer == "omission":
+                    self.omission_flags.append(flag)
+                else:
+                    # Default to omission if layer is unknown
+                    self.omission_flags.append(flag)
+            elif isinstance(flag, CorrectionEvent):
+                self.correction_events.append(flag)
+            elif isinstance(flag, BarometerSignal):
+                self.barometer_signals.append(flag)
+            elif isinstance(flag, ConflictPair):
+                self.conflict_pairs.append(flag)
+            elif isinstance(flag, ShadowPattern):
+                self.shadow_patterns.append(flag)
+            elif isinstance(flag, OpMove):
+                self.op_moves.append(flag)
+            elif isinstance(flag, VoidEvent):
+                self.void_events.append(flag)
+

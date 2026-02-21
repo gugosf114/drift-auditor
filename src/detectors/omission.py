@@ -11,7 +11,59 @@ import re
 from typing import Optional
 
 from models import Instruction, DriftFlag, DriftTag, BarometerSignal
+from detectors.base import BaseDetector, DetectorRegistry
 
+@DetectorRegistry.register_window_detector
+class OmissionDetector(BaseDetector):
+    def detect(self, window: list[dict], **kwargs) -> list[DriftFlag]:
+        active_instructions = kwargs.get("active_instructions", [])
+        window_barometer = kwargs.get("window_barometer", [])
+        
+        flags = detect_omission_local(window, active_instructions, window_barometer)
+        
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key:
+            for turn in window:
+                if turn["role"] != "assistant":
+                    continue
+                for inst in active_instructions:
+                    api_flag = detect_omission_api(turn["content"], inst.text, api_key)
+                    if api_flag is not None:
+                        api_flag.turn = turn["turn"]
+                        flags.append(api_flag)
+                        
+        for f in flags:
+            f.tag = f.tag or DriftTag.INSTRUCTION_DROP.value
+            
+        return flags
+
+@DetectorRegistry.register_full_detector
+class ContrastiveDriftDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        instructions = kwargs.get("instructions", [])
+        return detect_contrastive_drift(turns, instructions)
+
+@DetectorRegistry.register_full_detector
+class UndeclaredUnresolvedDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        return detect_undeclared_unresolved(turns)
+
+@DetectorRegistry.register_full_detector
+class CriteriaLockDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        return detect_criteria_lock(turns)
+
+@DetectorRegistry.register_full_detector
+class TaskWallViolationsDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        return detect_task_wall_violations(turns)
+
+@DetectorRegistry.register_full_detector
+class MissingBootloaderDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        system_prompt = kwargs.get("system_prompt", "")
+        user_preferences = kwargs.get("user_preferences", "")
+        return detect_missing_bootloader(turns, system_prompt, user_preferences)
 
 # ---------------------------------------------------------------------------
 # Layer 0: Instruction Extraction

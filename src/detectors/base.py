@@ -14,8 +14,7 @@ Usage:
             ...
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
-
+from typing import List, Dict, Any, Type
 
 class BaseDetector(ABC):
     """
@@ -29,14 +28,33 @@ class BaseDetector(ABC):
         self.config = config or {}
 
     @abstractmethod
-    def detect(self, transcript: List[Dict]) -> List[Dict]:
+    def detect(self, *args, **kwargs) -> List[Any]:
         """
         Analyze a transcript and return a list of detected drift events.
-
-        Args:
-            transcript: List of turn dicts with 'role', 'content', 'turn' keys.
-
-        Returns:
-            List of drift event dicts (format varies by detector type).
         """
         pass
+
+class DetectorRegistry:
+    """Registry for all active detectors."""
+    _window_detectors: List[Type[BaseDetector]] = []
+    _full_detectors: List[Type[BaseDetector]] = []
+
+    @classmethod
+    def register_window_detector(cls, detector_class: Type[BaseDetector]):
+        cls._window_detectors.append(detector_class)
+        return detector_class
+
+    @classmethod
+    def register_full_detector(cls, detector_class: Type[BaseDetector]):
+        cls._full_detectors.append(detector_class)
+        return detector_class
+
+    @classmethod
+    def get_window_detectors(cls, config: Dict[str, Any] | None = None) -> List[BaseDetector]:
+        return [detector(config) for detector in cls._window_detectors]
+
+    @classmethod
+    def get_full_detectors(cls, config: Dict[str, Any] | None = None) -> List[BaseDetector]:
+        return [detector(config) for detector in cls._full_detectors]
+
+

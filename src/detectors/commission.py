@@ -8,7 +8,36 @@ Extracted from drift_auditor.py monolith — no logic changes.
 
 import re
 from models import DriftFlag, DriftTag
+from detectors.base import BaseDetector, DetectorRegistry
 
+@DetectorRegistry.register_window_detector
+class CommissionDetector(BaseDetector):
+    def detect(self, window: list[dict], **kwargs) -> list[DriftFlag]:
+        flags = detect_commission(window)
+        for f in flags:
+            f.tag = f.tag or DriftTag.SYCOPHANCY.value
+        return flags
+
+@DetectorRegistry.register_full_detector
+class FalseEquivalenceDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        return detect_false_equivalence(turns)
+
+@DetectorRegistry.register_full_detector
+class FabricationFromConflictDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        return detect_fabrication_from_conflict(turns)
+
+@DetectorRegistry.register_full_detector
+class JudgeModeViolationsDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        return detect_judge_mode_violations(turns)
+
+@DetectorRegistry.register_full_detector
+class ArtificialSterilityDetector(BaseDetector):
+    def detect(self, turns: list[dict], **kwargs) -> list[DriftFlag]:
+        report_flags = kwargs.get("report_flags", [])
+        return detect_artificial_sterility(turns, report_flags)
 
 # ---------------------------------------------------------------------------
 # Layer 1: Commission Detection

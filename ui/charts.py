@@ -98,8 +98,8 @@ def build_barometer_strip(report, t: dict) -> go.Figure:
             showlegend=False,
         ))
 
+    fig.update_layout(**layout)
     fig.update_layout(
-        **layout,
         barmode="stack",
         height=60,
         margin=dict(l=120, r=30, t=0, b=0),

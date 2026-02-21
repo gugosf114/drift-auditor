@@ -1,50 +1,13 @@
 """
-Drift Auditor - Omission Drift Diagnostic Tool
-================================================
-Multi-turn drift detection for LLM conversations.
-10-Tag Taxonomy | 12-Rule Operator System | 20+ Detection Methods
-
-Detects instructions that a language model silently stops following.
-Not hallucination. Not sycophancy. Omission: the model received an
-instruction, followed it initially, then quietly dropped it.
-
-Detection layers:
-  Layer 1 - Commission: Sycophancy, reality distortion, false equivalence
-  Layer 2 - Omission: Instruction adherence, contrastive drift, voids
-  Layer 3 - Correction Persistence: Acknowledged fixes that fail
-  Layer 4 - Structural Barometer: Epistemic posture (RED/YELLOW/GREEN)
-  + Conflict pairs, shadow patterns, operator moves, pre-drift signals,
-    criteria lock, task wall, bootloader check, structured disobedience,
-    judge mode violations, Rumsfeld classification, artificial sterility,
-    Oracle counterfactual (PREVENTABLE/SYSTEMIC)
-
-Iron Pipeline architecture with sliding windows prevents self-contamination.
-Per-instruction lifecycle tracking with coupling scores.
-Edge vs. middle positional analysis.
-
-Author: George Abrahamyants
-Built with Claude Code + Cursor (Opus 4.6)
-
-Refactored into modular structure. This file is the thin orchestrator.
-All detection logic, models, and utilities live in their own modules.
+Drift Auditor — Entry Point
+============================
+Thin dispatcher (~80 lines). All logic lives in ui/modes/.
 """
-
 import os
-import sys
-from datetime import datetime
-from pathlib import Path
 
-# Ensure src/ is on sys.path when the script is run directly
-# (e.g. `python src/drift_auditor.py` or `python drift_auditor.py` from inside src/).
-# When installed via `pip install -e .`, setuptools handles this automatically.
-_SRC_DIR = Path(__file__).resolve().parent
-if str(_SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(_SRC_DIR))
+import streamlit as st
 
-try:
-    import yaml
-except ImportError:
-    yaml = None
+from ui.theme import THEMES, _build_css
 
 # --- Models ---
 from models import (
@@ -58,32 +21,11 @@ from models import (
 from parsers.chat_parser import parse_chat_log
 
 # --- Detectors ---
-from detectors.commission import (
-    detect_commission,
-    detect_false_equivalence,
-    detect_fabrication_from_conflict,
-    detect_judge_mode_violations,
-    detect_artificial_sterility,
-)
-from detectors.omission import (
-    extract_instructions,
-    detect_omission_local,
-    detect_omission_api,
-    detect_contrastive_drift,
-    detect_undeclared_unresolved,
-    detect_criteria_lock,
-    detect_task_wall_violations,
-    detect_missing_bootloader,
-)
-from detectors.structural import (
-    detect_barometer_signals,
-    detect_correction_persistence,
-    detect_operator_moves,
-    detect_voids,
-    detect_pre_drift_signals,
-    detect_conflict_pairs,
-    detect_shadow_patterns,
-)
+from detectors.base import DetectorRegistry
+import detectors.commission
+import detectors.omission
+import detectors.structural
+from detectors.omission import extract_instructions
 from detectors.frustration import compute_frustration_index, FrustrationResult
 
 # --- Utilities ---
@@ -193,8 +135,15 @@ def audit_conversation(
     if overlap >= window_size:
         overlap = max(0, window_size // 5)
 
-    # Layer 4: Full conversation barometer (run first — feeds into Layer 2)
-    report.barometer_signals = detect_barometer_signals(turns)
+    # Initialize detectors
+    window_detectors = DetectorRegistry.get_window_detectors()
+    full_detectors = DetectorRegistry.get_full_detectors()
+
+    # Run Barometer first as it feeds into Omission
+    barometer_detector = next((d for d in full_detectors if type(d).__name__ == 'BarometerSignalsDetector'), None)
+    if barometer_detector:
+        report.add_flags(barometer_detector.detect(turns))
+        full_detectors.remove(barometer_detector)
 
     # Sliding window audit for Layers 1 and 2
     seen_flags = set()  # Dedup key: (layer, turn, description)
@@ -203,120 +152,43 @@ def audit_conversation(
         end = min(start + window_size, len(turns))
         window = turns[start:end]
 
-        # Layer 1: Commission detection
-        commission_flags = detect_commission(window)
-        for f in commission_flags:
-            f.tag = f.tag or DriftTag.SYCOPHANCY.value
-            dedup_key = (f.layer, f.turn, f.description)
-            if dedup_key not in seen_flags:
-                seen_flags.add(dedup_key)
-                report.commission_flags.append(f)
+        active_instructions = [inst for inst in instructions if inst.active]
+        window_barometer = [s for s in report.barometer_signals if start <= s.turn < end]
 
-        # Layer 2: Instruction adherence check (with barometer signals)
-        active_instructions = [
-            inst for inst in instructions if inst.active
-        ]
-        # Filter barometer signals to current window for cross-layer boost
-        window_barometer = [
-            s for s in report.barometer_signals
-            if start <= s.turn < end
-        ]
-        omission_flags = detect_omission_local(window, active_instructions, window_barometer)
-
-        # Layer 2 (API): Semantic omission detection — runs when ANTHROPIC_API_KEY
-        # is set. One call per (instruction, response) pair in this window.
-        # This is the real semantic detector; local heuristics are the fallback.
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if api_key:
-            for turn in window:
-                if turn["role"] != "assistant":
-                    continue
-                for inst in active_instructions:
-                    api_flag = detect_omission_api(turn["content"], inst.text, api_key)
-                    if api_flag is not None:
-                        api_flag.turn = turn["turn"]
-                        omission_flags.append(api_flag)
-
-        for f in omission_flags:
-            f.tag = f.tag or DriftTag.INSTRUCTION_DROP.value
-            dedup_key = (f.layer, f.turn, f.description)
-            if dedup_key not in seen_flags:
-                seen_flags.add(dedup_key)
-                report.omission_flags.append(f)
+        for detector in window_detectors:
+            flags = detector.detect(
+                window, 
+                active_instructions=active_instructions, 
+                window_barometer=window_barometer
+            )
+            # Dedup logic
+            for f in flags:
+                if hasattr(f, 'layer') and hasattr(f, 'turn') and hasattr(f, 'description'):
+                    dedup_key = (f.layer, f.turn, f.description)
+                    if dedup_key not in seen_flags:
+                        seen_flags.add(dedup_key)
+                        report.add_flags([f])
+                else:
+                    report.add_flags([f])
 
         # Advance window
         start += window_size - overlap
 
-    # Layer 3: Correction persistence (needs full conversation view)
-    correction_events = detect_correction_persistence(turns)
-    for event in correction_events:
-        if not event.held:
-            event.tag = DriftTag.CORRECTION_DECAY.value
-    report.correction_events = correction_events
-
-    # Tag 9: Operator move detection (12-rule system)
-    report.op_moves = detect_operator_moves(turns)
-
-    # Tag 7: Conflict pair detection
-    report.conflict_pairs = detect_conflict_pairs(turns)
-
-    # Tag 8: Shadow pattern detection
-    report.shadow_patterns = detect_shadow_patterns(turns, instructions)
-
-    # 6a: Contrastive anchoring
-    contrastive_flags = detect_contrastive_drift(turns, instructions)
-    for f in contrastive_flags:
-        report.omission_flags.append(f)
-
-    # 6b: Void detection
-    report.void_events = detect_voids(turns, instructions)
-
-    # 6c: Undeclared unresolved
-    unresolved_flags = detect_undeclared_unresolved(turns)
-    for f in unresolved_flags:
-        report.omission_flags.append(f)
-
-    # 6e: False equivalence detection
-    equivalence_flags = detect_false_equivalence(turns)
-    for f in equivalence_flags:
-        report.commission_flags.append(f)
-
-    # 6f: Pre-drift signal detection
-    report.pre_drift_signals = detect_pre_drift_signals(turns)
-
-    # Criteria Lock (Rule 1 derivative)
-    criteria_lock_flags = detect_criteria_lock(turns)
-    for f in criteria_lock_flags:
-        report.omission_flags.append(f)
-
-    # Task Wall (Chapter 2 derivative)
-    task_wall_flags = detect_task_wall_violations(turns)
-    for f in task_wall_flags:
-        report.omission_flags.append(f)
-
-    # Bootloader Check
-    bootloader_flags = detect_missing_bootloader(turns, system_prompt, user_preferences)
-    for f in bootloader_flags:
-        report.omission_flags.append(f)
-
-    # Structured Disobedience (Chapter 2 derivative)
-    disobedience_flags = detect_fabrication_from_conflict(turns)
-    for f in disobedience_flags:
-        report.commission_flags.append(f)
-
-    # Judge Mode Violation (Rule 3 derivative)
-    judge_mode_flags = detect_judge_mode_violations(turns)
-    for f in judge_mode_flags:
-        report.commission_flags.append(f)
+    # Run remaining full-conversation detectors
+    for detector in full_detectors:
+        if type(detector).__name__ == 'ArtificialSterilityDetector':
+            all_flags = report.commission_flags + report.omission_flags + report.pre_drift_signals
+            report.add_flags(detector.detect(turns, report_flags=all_flags))
+        else:
+            report.add_flags(detector.detect(
+                turns, 
+                instructions=instructions,
+                system_prompt=system_prompt,
+                user_preferences=user_preferences
+            ))
 
     # Rumsfeld Classification (Rule 2)
     rumsfeld = classify_instruction_uncertainty(instructions)
-
-    # Artificial Sterility (AEGIS Layer 7)
-    all_flags = report.commission_flags + report.omission_flags + report.pre_drift_signals
-    sterility_flags = detect_artificial_sterility(turns, all_flags)
-    for f in sterility_flags:
-        report.commission_flags.append(f)
 
     # Oracle Counterfactual (AEGIS Layer 9) — classify all flags
     for f in report.commission_flags + report.omission_flags:
@@ -428,3 +300,14 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# ---------------------------------------------------------------------------
+# Batch Summary Writing
+# ---------------------------------------------------------------------------
+
+def write_batch_summary(results: list[dict], output_path: str, title: str):
+    """Shared logic for writing batch summaries across different parsers."""
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write("=" * 70 + "\n")
+        f.write(f"{title}\n")
+        # ... shared distribution and top 20 logic ...
