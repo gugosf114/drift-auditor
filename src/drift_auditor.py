@@ -317,4 +317,77 @@ def write_batch_summary(results: list[dict], output_path: str, title: str):
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write("=" * 70 + "\n")
         f.write(f"{title}\n")
-        # ... shared distribution and top 20 logic ...
+        f.write(f"Generated: {datetime.now().isoformat()}\n")
+        f.write("=" * 70 + "\n\n")
+
+        f.write(f"Total conversations analyzed: {len(results)}\n\n")
+
+        if not results:
+            f.write("No results to summarize.\n")
+            return
+
+        sorted_results = sorted(results, key=lambda r: r.get('overall_score', 0), reverse=True)
+
+        total_msgs = sum(r.get('message_count', 0) for r in sorted_results)
+        total_flags = sum(r.get('commission_flags', 0) + r.get('omission_flags', 0) for r in sorted_results)
+        total_corrections = sum(r.get('corrections_total', 0) for r in sorted_results)
+        total_failed = sum(r.get('corrections_failed', 0) for r in sorted_results)
+        total_voids = sum(r.get('void_events', 0) for r in sorted_results)
+        total_op_moves = sum(r.get('op_moves', 0) for r in sorted_results)
+        avg_score = sum(r.get('overall_score', 0) for r in sorted_results) / len(sorted_results)
+
+        f.write("AGGREGATE STATISTICS\n")
+        f.write("-" * 40 + "\n")
+        f.write(f"  Total messages processed: {total_msgs}\n")
+        f.write(f"  Average drift score: {avg_score:.1f}/10\n")
+        f.write(f"  Total drift flags: {total_flags}\n")
+        f.write(f"  Total correction events: {total_corrections}\n")
+        f.write(f"  Total corrections failed: {total_failed}\n")
+        f.write(f"  Correction failure rate: {total_failed/max(total_corrections,1)*100:.1f}%\n")
+        f.write(f"  Total void events: {total_voids}\n")
+        f.write(f"  Total operator moves: {total_op_moves}\n\n")
+
+        f.write("SCORE DISTRIBUTION\n")
+        f.write("-" * 40 + "\n")
+        for lo, hi, label in [(1, 2, "Clean"), (3, 4, "Low Drift"), (5, 6, "Moderate"),
+                               (7, 8, "Elevated"), (9, 10, "Severe")]:
+            count = sum(1 for r in sorted_results if lo <= r.get('overall_score', 0) <= hi)
+            pct = count / len(sorted_results) * 100
+            bar = "#" * int(pct / 2)
+            f.write(f"  {label:12s} ({lo}-{hi}): {count:3d} ({pct:5.1f}%) {bar}\n")
+        f.write("\n")
+
+        f.write("TOP 20 HIGHEST DRIFT CONVERSATIONS\n")
+        f.write("-" * 40 + "\n")
+        for r in sorted_results[:20]:
+            label = (r.get('name') or r.get('title') or r.get('conversation_id') or 'unnamed')[:60]
+            safe = label.encode('ascii', 'replace').decode('ascii')
+            model = r.get('model')
+            if model:
+                f.write(f"  [{r.get('overall_score', 0):2d}/10] [{model}] {safe}\n")
+            else:
+                f.write(f"  [{r.get('overall_score', 0):2d}/10] {safe}\n")
+            f.write(f"         msgs:{r.get('message_count', 0)} "
+                    f"flags:{r.get('commission_flags', 0)+r.get('omission_flags', 0)} "
+                    f"corr_fail:{r.get('corrections_failed', 0)}/{r.get('corrections_total', 0)} "
+                    f"voids:{r.get('void_events', 0)} ops:{r.get('op_moves', 0)}\n")
+        f.write("\n")
+
+        failed_corr = [r for r in sorted_results if r.get('corrections_failed', 0) > 0]
+        f.write(f"CONVERSATIONS WITH FAILED CORRECTIONS ({len(failed_corr)})\n")
+        f.write("-" * 40 + "\n")
+        for r in sorted(failed_corr, key=lambda x: x.get('corrections_failed', 0), reverse=True)[:20]:
+            label = (r.get('name') or r.get('title') or r.get('conversation_id') or 'unnamed')[:60]
+            safe = label.encode('ascii', 'replace').decode('ascii')
+            f.write(f"  {r.get('corrections_failed', 0)}/{r.get('corrections_total', 0)} failed: {safe}\n")
+        f.write("\n")
+
+        op_active = [r for r in sorted_results if r.get('op_moves', 0) > 0]
+        f.write(f"MOST OPERATOR INTERVENTION ({len(op_active)} conversations)\n")
+        f.write("-" * 40 + "\n")
+        for r in sorted(op_active, key=lambda x: x.get('op_moves', 0), reverse=True)[:10]:
+            label = (r.get('name') or r.get('title') or r.get('conversation_id') or 'unnamed')[:60]
+            safe = label.encode('ascii', 'replace').decode('ascii')
+            eff = r.get('op_moves_effective', 0)
+            tot = r.get('op_moves', 0)
+            f.write(f"  {tot} moves ({eff} effective): {safe}\n")

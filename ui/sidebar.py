@@ -14,7 +14,7 @@ def render_sidebar() -> dict:
     Render the full sidebar and return a config dict.
 
     Returns keys:
-        mode          — one of "📁 File Analysis", "⚡ Live Analysis", "📊 Regression"
+        mode          — one of "📁 File Analysis", "⚡ Live Analysis", "📊 Regression", "🕸️ Mesh Runtime"
         uploaded_file — UploadedFile or None
         system_prompt — str
         preferences   — str
@@ -28,9 +28,9 @@ def render_sidebar() -> dict:
 
         analysis_mode = st.radio(
             "Mode",
-            ["📁 File Analysis", "⚡ Live Analysis", "📊 Regression"],
+            ["📁 File Analysis", "⚡ Live Analysis", "📊 Regression", "🕸️ Mesh Runtime"],
             index=0,
-            help="File: upload a conversation. Live: paste-as-you-go. Regression: batch analytics.",
+            help="File: upload a conversation. Live: paste-as-you-go. Regression: batch analytics. Mesh: lossless nonlinear persistence runtime.",
         )
 
         if analysis_mode == "📁 File Analysis":
@@ -83,12 +83,96 @@ def render_sidebar() -> dict:
             st.markdown("**Window Parameters**")
             window_size = st.slider("Window Size", 10, 100, 50, step=5)
             overlap = st.slider("Overlap", 0, 25, 10, step=1)
+        elif analysis_mode == "🕸️ Mesh Runtime":
+            st.markdown("---")
+            st.markdown("**Mesh Inputs**")
+            mesh_uploaded_files = st.file_uploader(
+                "Upload transcripts",
+                type=["txt", "json"],
+                accept_multiple_files=True,
+                help="Upload one or many raw transcript files to compile a relationship mesh.",
+            )
+            mesh_index_upload = st.file_uploader(
+                "Or load existing mesh index JSON",
+                type=["json"],
+                accept_multiple_files=False,
+                help="Loads a previously exported relationship mesh index.",
+            )
+
+            st.markdown("**Mesh Compile Options**")
+            mesh_include_audit = st.checkbox(
+                "Include drift audit during compile",
+                value=True,
+                help="Runs drift audit per transcript during mesh compile. Turn off for faster compile.",
+            )
+            mesh_normalize_voice = st.checkbox(
+                "Normalize voice-to-text noise",
+                value=True,
+                help="Applies typo/noise normalization while preserving raw source hash.",
+            )
+
+            st.markdown("**Mesh Query**")
+            mesh_query = st.text_area(
+                "Runtime query",
+                height=90,
+                placeholder="e.g., connect checkpoint memory failures to trust-repair loops",
+            )
+            mesh_top_k = st.slider("Top-K retrieval hits", 1, 20, 8, step=1)
+
+            st.markdown("**Relationship State**")
+            mesh_trust = st.slider("Trust", 0.0, 1.0, 0.7, 0.05)
+            mesh_urgency = st.slider("Urgency", 0.0, 1.0, 0.5, 0.05)
+            mesh_autonomy = st.slider("Autonomy preference", 0.0, 1.0, 0.7, 0.05)
+            mesh_verbosity = st.slider("Verbosity tolerance", 0.0, 1.0, 0.3, 0.05)
+            mesh_evidence = st.slider("Evidence strictness", 0.0, 1.0, 0.8, 0.05)
+            mesh_debt = st.slider("Correction debt", 0.0, 1.0, 0.0, 0.05)
+            mesh_unresolved = st.slider("Unresolved threads", 0, 50, 0, 1)
+            mesh_risk = st.slider("Risk posture", 0.0, 1.0, 0.8, 0.05)
+            mesh_continuity = st.slider("Continuity confidence", 0.0, 1.0, 0.8, 0.05)
+
+            uploaded = None
+            system_prompt = ""
+            preferences = ""
+            window_size = 50
+            overlap = 10
         else:
             uploaded = None
             system_prompt = ""
             preferences = ""
             window_size = 50
             overlap = 10
+            mesh_uploaded_files = []
+            mesh_index_upload = None
+            mesh_include_audit = True
+            mesh_normalize_voice = True
+            mesh_query = ""
+            mesh_top_k = 8
+            mesh_trust = 0.7
+            mesh_urgency = 0.5
+            mesh_autonomy = 0.7
+            mesh_verbosity = 0.3
+            mesh_evidence = 0.8
+            mesh_debt = 0.0
+            mesh_unresolved = 0
+            mesh_risk = 0.8
+            mesh_continuity = 0.8
+
+        if analysis_mode != "🕸️ Mesh Runtime":
+            mesh_uploaded_files = []
+            mesh_index_upload = None
+            mesh_include_audit = True
+            mesh_normalize_voice = True
+            mesh_query = ""
+            mesh_top_k = 8
+            mesh_trust = 0.7
+            mesh_urgency = 0.5
+            mesh_autonomy = 0.7
+            mesh_verbosity = 0.3
+            mesh_evidence = 0.8
+            mesh_debt = 0.0
+            mesh_unresolved = 0
+            mesh_risk = 0.8
+            mesh_continuity = 0.8
 
         # Theme — tucked at bottom in expander
         st.markdown("---")
@@ -112,5 +196,20 @@ def render_sidebar() -> dict:
         "preferences": preferences,
         "window_size": window_size,
         "overlap": overlap,
+        "mesh_uploaded_files": mesh_uploaded_files,
+        "mesh_index_upload": mesh_index_upload,
+        "mesh_include_audit": mesh_include_audit,
+        "mesh_normalize_voice": mesh_normalize_voice,
+        "mesh_query": mesh_query,
+        "mesh_top_k": mesh_top_k,
+        "mesh_trust": mesh_trust,
+        "mesh_urgency": mesh_urgency,
+        "mesh_autonomy": mesh_autonomy,
+        "mesh_verbosity": mesh_verbosity,
+        "mesh_evidence": mesh_evidence,
+        "mesh_debt": mesh_debt,
+        "mesh_unresolved": mesh_unresolved,
+        "mesh_risk": mesh_risk,
+        "mesh_continuity": mesh_continuity,
         "theme": THEMES[st.session_state["theme_name"]],
     }

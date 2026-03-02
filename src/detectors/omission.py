@@ -8,11 +8,16 @@ Extracted from drift_auditor.py monolith — no logic changes.
 
 import os
 import re
+import logging
+import logging
 from typing import Optional
 
 from models import Instruction, DriftFlag, DriftTag, BarometerSignal
 from utils import instruction_is_active
 from detectors.base import BaseDetector, DetectorRegistry
+
+logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 @DetectorRegistry.register_window_detector
 class OmissionDetector(BaseDetector):
@@ -404,6 +409,7 @@ def detect_omission_api(turn_content: str, instruction_text: str,
         return None
 
     except Exception as e:
+        logger.warning("Omission API detection failed: %s", e)
         return None
 
 

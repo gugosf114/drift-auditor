@@ -15,6 +15,7 @@ from ui.sidebar import render_sidebar
 from ui.modes.file_analysis import render_file_analysis_mode
 from ui.modes.live_analysis import render_live_analysis_mode
 from ui.modes.regression import render_regression_mode
+from ui.modes.mesh_runtime import render_mesh_runtime_mode
 
 # Page config — must be first Streamlit call
 st.set_page_config(
@@ -39,5 +40,7 @@ if mode == "⚡ Live Analysis":
     render_live_analysis_mode(config)
 elif mode == "📊 Regression":
     render_regression_mode()
+elif mode == "🕸️ Mesh Runtime":
+    render_mesh_runtime_mode(config)
 else:
     render_file_analysis_mode(config)

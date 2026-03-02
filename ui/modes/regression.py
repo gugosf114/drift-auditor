@@ -39,6 +39,7 @@ def render_regression_mode() -> None:
     batch_data = []
     base_dir = os.path.dirname(os.path.abspath(__file__))
     repo_root = os.path.join(base_dir, "..", "..")
+    load_errors = []
     for batch_dir in ["batch_results", "batch_results_chatgpt"]:
         batch_path = os.path.join(repo_root, batch_dir)
         json_files = glob_mod.glob(os.path.join(batch_path, "batch_results*.json"))
@@ -50,14 +51,20 @@ def render_regression_mode() -> None:
                     if "model" not in r:
                         r["model"] = "claude" if "uuid" in r else "unknown"
                     batch_data.append(r)
-            except Exception:
-                pass
+            except Exception as e:
+                load_errors.append(f"{os.path.basename(jf)}: {e}")
 
     _reg_race.empty()
 
     if not batch_data:
         st.warning("No batch results found. Run `batch_audit.py` and/or `batch_audit_chatgpt.py` first.")
         return
+
+    if load_errors:
+        st.warning(f"Skipped {len(load_errors)} malformed batch file(s).")
+        with st.expander("Batch file load errors"):
+            for err in load_errors:
+                st.text(err)
 
     df = pd.DataFrame(batch_data)
     df["commission_flags"] = df["commission_flags"].fillna(0).astype(int)
