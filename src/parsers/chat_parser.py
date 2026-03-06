@@ -2,91 +2,238 @@
 Drift Auditor — Chat Parser
 =============================
 Parses chat transcripts into structured turns.
-Handles Claude JSON, plain text with role markers, Claude app copy-paste format.
-Extracted from drift_auditor.py monolith — no logic changes.
+Handles Claude JSON, ChatGPT export, plain text with role markers,
+Claude app copy-paste format.
+Extracted from drift_auditor.py monolith.
 """
 
 import json
 import re
 
 
+class ParseError(Exception):
+    """Raised when the parser can identify the format but can't extract turns."""
+    pass
+
+
+# Canonical role mapping — shared across all format handlers
+ROLE_MAP = {
+    "user": "user",
+    "human": "user",
+    "person": "user",
+    "customer": "user",
+    "assistant": "assistant",
+    "claude": "assistant",
+    "model": "assistant",
+    "ai": "assistant",
+    "bot": "assistant",
+    "chatgpt": "assistant",
+    "gpt": "assistant",
+    "system": "system",
+}
+
+
+def _normalize_role(raw_role: str) -> str:
+    return ROLE_MAP.get(raw_role.lower().strip(), raw_role.lower().strip())
+
+
+def _flatten_content(content) -> str:
+    """Safely flatten content that might be a string, list of blocks, or dict."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, str) and block.strip():
+                parts.append(block)
+            elif isinstance(block, dict):
+                parts.append(block.get("text", ""))
+        return " ".join(parts)
+    if isinstance(content, dict):
+        # ChatGPT content.parts format
+        parts = content.get("parts", [])
+        return _flatten_content(parts)
+    return str(content) if content else ""
+
+
+def _parse_chatgpt_mapping(data: dict) -> list[dict] | None:
+    """
+    Parse ChatGPT's nested mapping tree format.
+    ChatGPT stores messages as a tree (mapping) with parent/children refs.
+    Walk from current_node up to root, reverse for chronological order.
+    """
+    if isinstance(data, list):
+        # ChatGPT full export is a list of conversations
+        # If someone uploads the whole export, try the first conversation
+        for conv in data:
+            if isinstance(conv, dict) and "mapping" in conv:
+                result = _parse_chatgpt_mapping(conv)
+                if result and len(result) >= 2:
+                    return result
+        return None
+
+    mapping = data.get("mapping")
+    if not mapping or not isinstance(mapping, dict):
+        return None
+
+    current_id = data.get("current_node")
+    if not current_id or current_id not in mapping:
+        current_id = next(
+            (nid for nid, n in mapping.items() if n.get("parent") is None), None
+        )
+    if current_id is None:
+        return None
+
+    # Walk parent chain from current_node to root, then reverse
+    path = []
+    visited = set()
+    cur = current_id
+    while cur and cur not in visited:
+        visited.add(cur)
+        node = mapping.get(cur)
+        if not node:
+            break
+        path.append(cur)
+        cur = node.get("parent")
+    path.reverse()
+
+    turns = []
+    for node_id in path:
+        node = mapping.get(node_id, {})
+        msg = node.get("message")
+        if not msg:
+            continue
+        author = msg.get("author", {}).get("role", "unknown")
+        content = _flatten_content(msg.get("content", {}))
+        if not content.strip():
+            continue
+        role = _normalize_role(author)
+        if role in ("user", "assistant", "system"):
+            turns.append({"role": role, "content": content.strip(), "turn": len(turns)})
+
+    return turns if len(turns) >= 2 else None
+
+
 def parse_chat_log(raw_text: str) -> list[dict]:
     """
     Parse a chat transcript into structured turns.
     Handles multiple formats:
-      - Claude.ai export (JSON)
+      - Claude.ai export (JSON list or chat_messages wrapper)
+      - ChatGPT data export (nested mapping format)
       - Plain text with role markers (Human:/Assistant:)
-      - Custom formats with explicit turn markers
+      - Claude app copy-paste (date-separated)
 
     Returns list of dicts: [{"role": "user"|"assistant", "content": "...", "turn": N}]
+    Raises ParseError if format is recognized but extraction fails.
     """
-    # Canonical role mapping
-    ROLE_MAP = {
-        "user": "user",
-        "human": "user",
-        "person": "user",
-        "customer": "user",
-        "assistant": "assistant",
-        "claude": "assistant",
-        "model": "assistant",
-        "ai": "assistant",
-        "bot": "assistant",
-        "system": "system",
-    }
+    raw_text = raw_text.strip()
+    if not raw_text:
+        raise ParseError("Empty input — no conversation text provided.")
 
-    def normalize_role(raw_role: str) -> str:
-        return ROLE_MAP.get(raw_role.lower().strip(), raw_role.lower().strip())
-    # Try JSON first (Claude.ai export format)
+    # Try JSON formats first
     try:
         data = json.loads(raw_text)
+
+        # ChatGPT mapping format (single conversation or full export)
+        if isinstance(data, dict) and "mapping" in data:
+            result = _parse_chatgpt_mapping(data)
+            if result:
+                return result
+            raise ParseError(
+                "Recognized ChatGPT export format but could not extract messages. "
+                "The conversation may be empty or contain only system messages."
+            )
+
         if isinstance(data, list):
+            # Could be ChatGPT full export (list of conversations with mapping)
+            if data and isinstance(data[0], dict) and "mapping" in data[0]:
+                result = _parse_chatgpt_mapping(data)
+                if result:
+                    return result
+                raise ParseError(
+                    "Recognized ChatGPT multi-conversation export but no conversations "
+                    "had extractable messages. Try uploading a single conversation."
+                )
+
+            # Claude.ai JSON export (list of message objects)
             turns = []
             for i, msg in enumerate(data):
-                role = normalize_role(msg.get("role", msg.get("sender", "unknown")))
-                content = msg.get("content", msg.get("text", ""))
-                if isinstance(content, list):
-                    # Handle content blocks
-                    content = " ".join(
-                        block.get("text", "") for block in content
-                        if isinstance(block, dict) and block.get("type") == "text"
-                    )
-                turns.append({"role": role, "content": str(content), "turn": i})
-            return turns
-        elif isinstance(data, dict) and "chat_messages" in data:
-            turns = []
-            for i, msg in enumerate(data["chat_messages"]):
-                role = normalize_role(msg.get("sender", "unknown"))
-                content = msg.get("text", "")
-                if isinstance(content, list):
-                    content = " ".join(
-                        block.get("text", "") for block in content
-                        if isinstance(block, dict) and block.get("type") == "text"
-                    )
-                turns.append({"role": role, "content": str(content), "turn": i})
-            return turns
-    except (json.JSONDecodeError, TypeError):
-        pass
+                if not isinstance(msg, dict):
+                    continue
+                role = _normalize_role(msg.get("role", msg.get("sender", "unknown")))
+                content = _flatten_content(msg.get("content", msg.get("text", "")))
+                if content.strip():
+                    turns.append({"role": role, "content": content.strip(), "turn": len(turns)})
+            if turns:
+                return turns
+            raise ParseError(
+                "Parsed JSON array but no messages found. Expected objects with "
+                "'role'/'content' or 'sender'/'text' fields."
+            )
+
+        elif isinstance(data, dict):
+            # Claude chat_messages wrapper
+            if "chat_messages" in data:
+                turns = []
+                for msg in data["chat_messages"]:
+                    if not isinstance(msg, dict):
+                        continue
+                    role = _normalize_role(msg.get("sender", "unknown"))
+                    content = _flatten_content(msg.get("text", ""))
+                    if content.strip():
+                        turns.append({"role": role, "content": content.strip(), "turn": len(turns)})
+                if turns:
+                    return turns
+                raise ParseError(
+                    "Found 'chat_messages' key but no extractable messages inside."
+                )
+
+            # Generic JSON object — try common wrapper keys
+            for key in ("messages", "conversation", "turns", "data"):
+                if key in data and isinstance(data[key], list):
+                    turns = []
+                    for msg in data[key]:
+                        if not isinstance(msg, dict):
+                            continue
+                        role = _normalize_role(
+                            msg.get("role", msg.get("sender", msg.get("author", "unknown")))
+                        )
+                        content = _flatten_content(
+                            msg.get("content", msg.get("text", msg.get("message", "")))
+                        )
+                        if content.strip():
+                            turns.append({"role": role, "content": content.strip(), "turn": len(turns)})
+                    if turns:
+                        return turns
+
+            raise ParseError(
+                "Parsed JSON object but couldn't find messages. Expected a 'chat_messages', "
+                "'messages', 'conversation', or 'mapping' key containing message objects."
+            )
+
+    except json.JSONDecodeError:
+        pass  # Not JSON — fall through to text parsing
+    except ParseError:
+        raise  # Re-raise our own errors
 
     # Try plain text with role markers
     turns = []
-    # Split on common role markers
-    pattern = r'(?:^|\n)(Human|User|Assistant|Claude|System)\s*:\s*'
+    # Split on common role markers (expanded set)
+    pattern = r'(?:^|\n)(Human|User|Assistant|Claude|System|AI|Bot|Model|ChatGPT|GPT)\s*:\s*'
     parts = re.split(pattern, raw_text, flags=re.IGNORECASE)
 
     if len(parts) > 1:
         # parts[0] is text before first marker (often empty)
         i = 1  # skip preamble
-        turn_num = 0
         while i < len(parts) - 1:
             role_raw = parts[i].strip().lower()
             content = parts[i + 1].strip()
-            role = normalize_role(role_raw)
-            if role_raw == "system":
-                role = "system"
-            turns.append({"role": role, "content": content, "turn": turn_num})
-            turn_num += 1
+            role = _normalize_role(role_raw)
+            if content:
+                turns.append({"role": role, "content": content, "turn": len(turns)})
             i += 2
-        return turns
+        if turns:
+            return turns
 
     # Try Claude app copy-paste format
     # Pattern: user message (short), then date line, then optional summary header,
@@ -190,5 +337,29 @@ def parse_chat_log(raw_text: str) -> list[dict]:
         if len(turns) >= 2:
             return turns
 
-    # Fallback: treat entire text as a single block
-    return [{"role": "unknown", "content": raw_text, "turn": 0}]
+    # Fallback: try line-by-line heuristic for conversations that use
+    # ">" quoting, markdown headers, or numbered turns
+    bracket_pattern = r'^>\s*(.*?)$'
+    bracket_lines = re.findall(bracket_pattern, raw_text, re.MULTILINE)
+    if len(bracket_lines) >= 2:
+        turns = []
+        for line in bracket_lines:
+            role = "user" if len(turns) % 2 == 0 else "assistant"
+            if line.strip():
+                turns.append({"role": role, "content": line.strip(), "turn": len(turns)})
+        if len(turns) >= 2:
+            return turns
+
+    # Last resort: if there's enough text, return it as unparsed so the
+    # caller gets a clear signal rather than silent failure
+    if len(raw_text) < 20:
+        raise ParseError(
+            "Input too short to be a conversation. "
+            "Provide a transcript with Human:/Assistant: markers or a JSON export."
+        )
+    raise ParseError(
+        "Could not detect conversation format. Supported formats:\n"
+        "- JSON: Claude.ai export, ChatGPT data export, or {role, content} objects\n"
+        "- Text: Lines prefixed with Human:/Assistant:, User:/Claude:, etc.\n"
+        "- Claude app: Copy-paste with date separators"
+    )

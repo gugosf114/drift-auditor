@@ -51,7 +51,19 @@ def render_sidebar() -> dict:
             if "sample_prompt" not in st.session_state:
                 st.session_state.sample_prompt = ""
 
-            if st.button("📋 Load Sample Conversation", use_container_width=True):
+            # Auto-load sample on first visit so new users see results instantly
+            if "first_visit_loaded" not in st.session_state:
+                st.session_state.first_visit_loaded = True
+                if not uploaded:
+                    try:
+                        with open(sample_conv_path, "r", encoding="utf-8") as f:
+                            st.session_state.sample_bytes = f.read().encode("utf-8")
+                        with open(sample_prompt_path, "r", encoding="utf-8") as f:
+                            st.session_state.sample_prompt = f.read()
+                    except FileNotFoundError:
+                        pass
+
+            if st.button("Load Sample Conversation", use_container_width=True):
                 try:
                     with open(sample_conv_path, "r", encoding="utf-8") as f:
                         st.session_state.sample_bytes = f.read().encode("utf-8")
@@ -173,6 +185,32 @@ def render_sidebar() -> dict:
             mesh_unresolved = 0
             mesh_risk = 0.8
             mesh_continuity = 0.8
+
+        # Metrics glossary
+        st.markdown("---")
+        with st.expander("Explain Metrics", expanded=False):
+            st.markdown("""
+**Drift Score** (1-10): How much the model strayed from your instructions. 1 = clean, 10 = severe.
+
+**OLI** (Operator Load Index): How often you had to intervene. Lower = the model stays on track by itself.
+
+**Alignment Tax**: What percentage of the conversation was spent correcting the model instead of doing productive work.
+
+**Instruction Survival Rate**: Of all instructions you gave, what percentage were still being followed at the end.
+
+**Correction Efficiency**: When you corrected the model, did the fix stick? 100% = every correction held.
+
+**Self-Sufficiency**: Can this model run unsupervised? 100 = no hand-holding needed. 0 = constant babysitting.
+
+**Frustration Index**: Experimental sentiment proxy measuring operator frustration over time.
+
+---
+**Detection Layers**
+- **L1 Commission**: Model said something wrong (sycophancy, hallucination, false confidence)
+- **L2 Omission**: Model stopped doing something right (dropped instructions, semantic dilution)
+- **L3 Persistence**: Model acknowledged a correction but reverted later
+- **L4 Barometer**: Structural posture shifts (hedging, certainty swings)
+""")
 
         # Theme — tucked at bottom in expander
         st.markdown("---")

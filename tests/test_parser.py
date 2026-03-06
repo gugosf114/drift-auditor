@@ -59,15 +59,19 @@ class TestJSONParsing:
 
 
 class TestEdgeCases:
-    def test_empty_input_returns_fallback(self):
-        """Parser returns a single 'unknown' turn for empty input (existing behavior)."""
-        turns = parse_chat_log("")
-        assert len(turns) >= 0  # Parser may return fallback turn
+    def test_empty_input_raises_parse_error(self):
+        """Parser raises ParseError for empty input."""
+        import pytest
+        from parsers.chat_parser import ParseError
+        with pytest.raises(ParseError):
+            parse_chat_log("")
 
-    def test_whitespace_returns_fallback(self):
-        """Parser returns a single 'unknown' turn for whitespace (existing behavior)."""
-        turns = parse_chat_log("   \n\n  ")
-        assert len(turns) >= 0
+    def test_whitespace_raises_parse_error(self):
+        """Parser raises ParseError for whitespace-only input."""
+        import pytest
+        from parsers.chat_parser import ParseError
+        with pytest.raises(ParseError):
+            parse_chat_log("   \n\n  ")
 
     def test_single_turn(self):
         turns = parse_chat_log("User: Just one message")

@@ -93,7 +93,11 @@ def render_file_analysis_mode(config: dict) -> None:
         report: AuditReport = run_audit(raw_bytes, system_prompt, preferences, window_size, overlap, conv_id)
     except Exception as exc:
         race_placeholder.empty()
-        st.error(f"Unable to audit this conversation: {exc}")
+        from parsers.chat_parser import ParseError
+        if isinstance(exc, ParseError):
+            st.error(f"**Parse error:** {exc}")
+        else:
+            st.error(f"Unable to audit this conversation: {exc}")
         return
     race_placeholder.empty()
 
@@ -625,10 +629,10 @@ def render_file_analysis_mode(config: dict) -> None:
     # Export
     st.divider()
     st.subheader("Export Report")
-    exp1, exp2 = st.columns(2)
+    exp1, exp2, exp3 = st.columns(3)
     with exp1:
         st.download_button(
-            label="📥 Download JSON Report",
+            label="Download JSON Report",
             data=report_to_json(report),
             file_name=f"drift_audit_{report.conversation_id}.json",
             mime="application/json",
@@ -636,9 +640,22 @@ def render_file_analysis_mode(config: dict) -> None:
         )
     with exp2:
         st.download_button(
-            label="📄 Download Text Report",
+            label="Download Text Report",
             data=format_report(report),
             file_name=f"drift_audit_{report.conversation_id}.txt",
             mime="text/plain",
             use_container_width=True,
         )
+    with exp3:
+        try:
+            from ui.pdf_export import generate_audit_pdf
+            pdf_bytes = generate_audit_pdf(report)
+            st.download_button(
+                label="Download PDF Audit Report",
+                data=pdf_bytes,
+                file_name=f"drift_audit_{report.conversation_id}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+            )
+        except ImportError:
+            st.info("Install fpdf2 for PDF export: pip install fpdf2")

@@ -109,7 +109,16 @@ def audit_conversation(
     from accumulating enough context to drift on the audit itself.
     """
     # Parse
-    turns = parse_chat_log(raw_text)
+    from parsers.chat_parser import ParseError
+    try:
+        turns = parse_chat_log(raw_text)
+    except ParseError:
+        return AuditReport(
+            conversation_id=conversation_id,
+            total_turns=0,
+            instructions_extracted=0,
+            metadata={"error": "No turns parsed from input"}
+        )
     if not turns:
         return AuditReport(
             conversation_id=conversation_id,
