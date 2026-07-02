@@ -1,59 +1,38 @@
 """
 Drift Auditor — Theme System
 =============================
-5 themes, CSS builder, and severity color/label helpers.
+One visual identity ("Ledger"), CSS builder, severity color/label helpers.
 All pure functions — no Streamlit dependency. Fully testable.
+
+Design rule: interface chrome is achromatic graphite. Color is reserved
+for findings, on a calibrated four-step ramp (stable -> caution ->
+elevated -> critical). Type: IBM Plex Serif for the wordmark, Plex Sans
+for interface text, Plex Mono for readouts and data.
 """
 
-THEMES = {
-    "Ember": {
-        "label": "Ember",
-        "desc": "Warm dark with amber accents",
-        "bg": "#0a0807", "surface": "#12100f", "border": "#2a2623",
-        "border_accent": "#3a3530", "text": "#e8dfd0", "muted": "#8b7d6b",
-        "chart_text": "#c4b8a3", "accent": "#f59e0b", "accent_glow": "rgba(245,158,11,0.08)",
-        "accent_hover": "rgba(245,158,11,0.15)",
-        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
-    },
-    "Midnight": {
-        "label": "Midnight",
-        "desc": "Cool blue on deep navy",
-        "bg": "#0b0e14", "surface": "#111720", "border": "#1e2a3a",
-        "border_accent": "#2a3a4e", "text": "#d0dce8", "muted": "#6b7d8b",
-        "chart_text": "#a3b8c4", "accent": "#3b82f6", "accent_glow": "rgba(59,130,246,0.08)",
-        "accent_hover": "rgba(59,130,246,0.15)",
-        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
-    },
-    "Phosphor": {
-        "label": "Phosphor",
-        "desc": "Terminal green on black",
-        "bg": "#050505", "surface": "#0a0f0a", "border": "#1a2e1a",
-        "border_accent": "#2a4a2a", "text": "#b8e6b8", "muted": "#5a8a5a",
-        "chart_text": "#8bc48b", "accent": "#22c55e", "accent_glow": "rgba(34,197,94,0.08)",
-        "accent_hover": "rgba(34,197,94,0.15)",
-        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
-    },
-    "Infrared": {
-        "label": "Infrared",
-        "desc": "Dark with crimson edge",
-        "bg": "#0a0506", "surface": "#120a0c", "border": "#2a1620",
-        "border_accent": "#3a2030", "text": "#e8d0d8", "muted": "#8b6b75",
-        "chart_text": "#c4a3b0", "accent": "#ef4444", "accent_glow": "rgba(239,68,68,0.08)",
-        "accent_hover": "rgba(239,68,68,0.15)",
-        "green": "#22c55e", "red": "#ef4444", "deep_red": "#dc2626",
-    },
-    "Bone": {
-        "label": "Bone",
-        "desc": "Light mode — paper white",
-        "bg": "#faf8f5", "surface": "#ffffff", "border": "#e5e0d8",
-        "border_accent": "#d5d0c8", "text": "#1a1610", "muted": "#8b8578",
-        "chart_text": "#5a5548", "accent": "#b45309", "accent_glow": "rgba(180,83,9,0.06)",
-        "accent_hover": "rgba(180,83,9,0.12)",
-        "green": "#16a34a", "red": "#dc2626", "deep_red": "#b91c1c",
-    },
+LEDGER = {
+    "label": "Ledger",
+    "desc": "Graphite chrome; color reserved for findings",
+    # chrome (achromatic)
+    "bg": "#0f1216", "surface": "#151a20", "border": "#232b34",
+    "border_accent": "#33404d", "text": "#dee4ea", "muted": "#7d8894",
+    "chart_text": "#a9b4bf", "grid": "rgba(222,228,234,0.07)",
+    # findings ramp (the only chroma in the interface)
+    "green": "#4e9478",       # stable
+    "accent": "#c79a3f",      # caution
+    "red": "#c05b3c",         # elevated
+    "deep_red": "#a63b2a",    # critical
+    "accent_glow": "rgba(199,154,63,0.10)",
+    "accent_hover": "rgba(199,154,63,0.18)",
 }
 
-DEFAULT_THEME = "Ember"
+THEMES = {"Ledger": LEDGER}
+
+DEFAULT_THEME = "Ledger"
+
+FONT_STACK_UI = "'IBM Plex Sans', -apple-system, sans-serif"
+FONT_STACK_DATA = "'IBM Plex Mono', ui-monospace, monospace"
+FONT_STACK_WORDMARK = "'IBM Plex Serif', Georgia, serif"
 
 PLOTLY_LAYOUT_BASE = dict(
     paper_bgcolor="rgba(0,0,0,0)",
@@ -68,16 +47,16 @@ def get_plotly_layout(t: dict) -> dict:
         **PLOTLY_LAYOUT_BASE,
         "font": dict(
             color=t["chart_text"],
-            family="JetBrains Mono, DM Sans, sans-serif",
+            family="IBM Plex Mono, IBM Plex Sans, monospace",
             size=12,
         ),
     }
 
 
 def score_color(score: int, t: dict | None = None) -> str:
-    """Map a 1-10 severity score to a themed hex color.
+    """Map a 1-10 severity score to a ramp color.
 
-    Falls back to Ember theme if no theme dict provided.
+    Falls back to the Ledger theme if no theme dict provided.
     """
     if t is None:
         t = THEMES[DEFAULT_THEME]
@@ -109,159 +88,224 @@ def _build_css(t: dict) -> str:
     """Generate full Streamlit CSS for the given theme dict."""
     return f"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,500;1,500&display=swap');
 
 .stApp {{
     background: {t["bg"]};
-    font-family: 'DM Sans', sans-serif;
+    font-family: {FONT_STACK_UI};
+    color: {t["text"]};
+    font-size: 15px;
+}}
+h1, h2, h3 {{
+    font-family: {FONT_STACK_UI};
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: {t["text"]};
 }}
+h2 {{ font-size: 1.35rem; }}
+h3 {{ font-size: 1.05rem; }}
+
+/* Wordmark — the one serif moment */
+.wordmark {{
+    font-family: {FONT_STACK_WORDMARK};
+    font-style: italic;
+    font-weight: 500;
+    font-size: 1.5rem;
+    color: {t["text"]};
+    line-height: 1.2;
+    margin-bottom: 2px;
+}}
+.wordmark-eyebrow {{
+    font-family: {FONT_STACK_UI};
+    font-size: 0.66rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: {t["muted"]};
+}}
+
+/* Panels — flat, hairline-ruled. No glass, no glow. */
 .glass-card {{
     background: {t["surface"]};
     border: 1px solid {t["border"]};
-    border-radius: 4px;
-    padding: 20px;
+    border-radius: 2px;
+    padding: 18px 20px;
     margin-bottom: 8px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.15);
 }}
 .glass-card-hero {{
     background: {t["surface"]};
     border: 1px solid {t["border_accent"]};
-    border-radius: 4px;
-    padding: 28px 20px;
+    border-radius: 2px;
+    padding: 24px 20px 18px;
     text-align: center;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.25), 0 0 30px {t["accent_glow"]};
 }}
+
+/* Instrument readouts */
 .metric-value {{
-    font-size: 2.8rem;
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
+    font-size: 2.4rem;
+    font-weight: 500;
+    font-family: {FONT_STACK_DATA};
+    font-variant-numeric: tabular-nums;
     line-height: 1.1;
     text-align: center;
 }}
 .metric-value-hero {{
-    font-size: 4rem;
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
-    line-height: 1.1;
+    font-size: 3.6rem;
+    font-weight: 500;
+    font-family: {FONT_STACK_DATA};
+    font-variant-numeric: tabular-nums;
+    line-height: 1.05;
     text-align: center;
 }}
 .metric-label {{
-    font-size: 0.72rem;
-    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.68rem;
+    font-family: {FONT_STACK_UI};
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 2.5px;
+    letter-spacing: 0.12em;
     color: {t["muted"]};
     text-align: center;
     margin-bottom: 6px;
 }}
 .metric-sub {{
     font-size: 0.78rem;
-    font-family: 'JetBrains Mono', monospace;
+    font-family: {FONT_STACK_UI};
     color: {t["muted"]};
     text-align: center;
     margin-top: 4px;
 }}
+
+/* Calibration scale — signature element. A fixed 1-10 ramp with the
+   conversation's reading marked on it, like a gauge face. */
+.cal-scale {{
+    position: relative;
+    height: 6px;
+    border-radius: 3px;
+    margin: 14px 8px 4px;
+    background: linear-gradient(to right,
+        {t["green"]} 0%, {t["green"]} 30%,
+        {t["accent"]} 42%, {t["accent"]} 50%,
+        {t["red"]} 62%, {t["red"]} 70%,
+        {t["deep_red"]} 85%, {t["deep_red"]} 100%);
+    opacity: 0.85;
+}}
+.cal-marker {{
+    position: absolute;
+    top: -5px;
+    width: 2px;
+    height: 16px;
+    background: {t["text"]};
+    box-shadow: 0 0 0 2px {t["bg"]};
+}}
+.cal-ticks {{
+    display: flex;
+    justify-content: space-between;
+    font-family: {FONT_STACK_DATA};
+    font-size: 0.62rem;
+    color: {t["muted"]};
+    margin: 2px 8px 0;
+}}
+
 .status-held {{
     color: {t["green"]};
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-family: {FONT_STACK_DATA};
 }}
 .status-failed {{
     color: {t["red"]};
-    font-weight: 700;
-    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-family: {FONT_STACK_DATA};
 }}
 .event-card {{
     background: {t["surface"]};
     border: 1px solid {t["border"]};
-    border-radius: 4px;
-    padding: 16px;
-    margin-bottom: 10px;
+    border-radius: 2px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
 }}
+
 section[data-testid="stSidebar"] {{
     background: {t["bg"]};
     border-right: 1px solid {t["border"]};
 }}
+
 .stTabs [data-baseweb="tab-list"] {{
-    gap: 4px;
+    gap: 2px;
     border-bottom: 1px solid {t["border"]};
 }}
 .stTabs [data-baseweb="tab"] {{
     background: transparent;
-    border-radius: 4px 4px 0 0;
-    padding: 8px 16px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    border-radius: 0;
+    padding: 8px 14px;
+    font-family: {FONT_STACK_UI};
+    font-size: 0.85rem;
+    font-weight: 500;
     color: {t["muted"]};
 }}
 .stTabs [data-baseweb="tab"][aria-selected="true"] {{
-    background: {t["surface"]};
-    color: {t["accent"]};
+    background: transparent;
+    color: {t["text"]};
     border-bottom: 2px solid {t["accent"]};
 }}
-h1, h2, h3 {{
-    font-family: 'JetBrains Mono', monospace;
-    color: {t["text"]};
-}}
+
 .streamlit-expanderHeader {{
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.85rem;
+    font-family: {FONT_STACK_UI};
+    font-size: 0.88rem;
     color: {t["chart_text"]};
 }}
 [data-testid="stMetricValue"] {{
-    font-family: 'JetBrains Mono', monospace;
-    color: {t["accent"]};
+    font-family: {FONT_STACK_DATA};
+    font-variant-numeric: tabular-nums;
+    color: {t["text"]};
 }}
 [data-testid="stMetricLabel"] {{
-    font-family: 'JetBrains Mono', monospace;
+    font-family: {FONT_STACK_UI};
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 0.1em;
     color: {t["muted"]};
 }}
 .stButton > button {{
     background: {t["surface"]};
-    border: 1px solid {t["border"]};
+    border: 1px solid {t["border_accent"]};
     color: {t["text"]};
-    font-family: 'JetBrains Mono', monospace;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-size: 0.78rem;
-    border-radius: 4px;
-    transition: all 0.2s;
+    font-family: {FONT_STACK_UI};
+    font-weight: 500;
+    font-size: 0.85rem;
+    border-radius: 2px;
+    transition: border-color 0.15s;
 }}
 .stButton > button:hover {{
-    border-color: {t["accent"]};
-    color: {t["accent"]};
-    box-shadow: 0 0 12px {t["accent_hover"]};
+    border-color: {t["muted"]};
+    color: {t["text"]};
 }}
 .stDownloadButton > button {{
     background: {t["surface"]};
-    border: 1px solid {t["accent"]};
-    color: {t["accent"]};
-    font-family: 'JetBrains Mono', monospace;
-    border-radius: 4px;
+    border: 1px solid {t["border_accent"]};
+    color: {t["text"]};
+    font-family: {FONT_STACK_UI};
+    font-weight: 500;
+    border-radius: 2px;
 }}
 .stTextArea textarea, .stTextInput input {{
     background: {t["surface"]};
     border: 1px solid {t["border"]};
     color: {t["text"]};
-    font-family: 'DM Sans', sans-serif;
-    border-radius: 4px;
+    font-family: {FONT_STACK_UI};
+    border-radius: 2px;
 }}
 [data-testid="stFileUploader"] {{
-    border: 1px dashed {t["border"]};
-    border-radius: 4px;
+    border: 1px dashed {t["border_accent"]};
+    border-radius: 2px;
 }}
 ::-webkit-scrollbar {{ width: 6px; }}
 ::-webkit-scrollbar-track {{ background: {t["bg"]}; }}
-::-webkit-scrollbar-thumb {{ background: {t["border"]}; border-radius: 3px; }}
-::-webkit-scrollbar-thumb:hover {{ background: {t["accent"]}; }}
+::-webkit-scrollbar-thumb {{ background: {t["border_accent"]}; border-radius: 3px; }}
 .stAlert {{
-    border-radius: 4px;
-    font-family: 'DM Sans', sans-serif;
+    border-radius: 2px;
+    font-family: {FONT_STACK_UI};
 }}
+hr {{ border-color: {t["border"]}; }}
 </style>
 """

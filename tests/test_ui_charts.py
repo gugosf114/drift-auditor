@@ -22,7 +22,7 @@ from ui.charts import (
     build_frustration_line_fig,
 )
 
-T = THEMES["Ember"]
+T = THEMES["Ledger"]
 
 
 # ---------------------------------------------------------------------------

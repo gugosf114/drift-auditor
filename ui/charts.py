@@ -26,8 +26,7 @@ def build_timeline_fig(report, t: dict) -> go.Figure:
             y=[f.severity for f in report.commission_flags],
             mode="markers",
             name="Commission",
-            marker=dict(size=11, color="#ef4444", symbol="diamond",
-                        line=dict(width=1, color="rgba(239,68,68,0.5)")),
+            marker=dict(size=11, color=t["red"], symbol="diamond", line=dict(width=0)),
             hovertext=[f"T{f.turn}: {f.description[:60]}" for f in report.commission_flags],
             hoverinfo="text",
         ))
@@ -38,8 +37,7 @@ def build_timeline_fig(report, t: dict) -> go.Figure:
             y=[f.severity for f in report.omission_flags],
             mode="markers",
             name="Omission",
-            marker=dict(size=11, color="#f59e0b", symbol="triangle-up",
-                        line=dict(width=1, color="rgba(245,158,11,0.5)")),
+            marker=dict(size=11, color=t["accent"], symbol="triangle-up", line=dict(width=0)),
             hovertext=[f"T{f.turn}: {f.description[:60]}" for f in report.omission_flags],
             hoverinfo="text",
         ))
@@ -51,7 +49,7 @@ def build_timeline_fig(report, t: dict) -> go.Figure:
             y=[8] * len(failed),
             mode="markers",
             name="Correction Failed",
-            marker=dict(size=14, color="#a855f7", symbol="x", line=dict(width=2, color="#a855f7")),
+            marker=dict(size=14, color=t["deep_red"], symbol="x", line=dict(width=2, color=t["deep_red"])),
             hovertext=[f"Correction failed at T{e.failure_turn}" for e in failed],
             hoverinfo="text",
         ))
@@ -63,7 +61,7 @@ def build_timeline_fig(report, t: dict) -> go.Figure:
             y=[s.severity for s in red_signals],
             mode="markers",
             name="Barometer RED",
-            marker=dict(size=9, color="#ef4444", symbol="circle", opacity=0.4),
+            marker=dict(size=9, color=t["red"], symbol="circle", opacity=0.4),
             hovertext=[f"T{s.turn}: {s.description[:60]}" for s in red_signals],
             hoverinfo="text",
         ))
@@ -71,8 +69,8 @@ def build_timeline_fig(report, t: dict) -> go.Figure:
     fig.update_layout(
         **layout,
         height=380,
-        xaxis=dict(title="Turn", gridcolor="#2a2623", zeroline=False),
-        yaxis=dict(title="Severity", range=[0, 11], gridcolor="#2a2623", zeroline=False),
+        xaxis=dict(title="Turn", gridcolor=t["grid"], zeroline=False),
+        yaxis=dict(title="Severity", range=[0, 11], gridcolor=t["grid"], zeroline=False),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                     bgcolor="rgba(0,0,0,0)", font=dict(size=11)),
         hovermode="closest",
@@ -86,13 +84,13 @@ def build_barometer_strip(report, t: dict) -> go.Figure:
     if not report.barometer_signals:
         return go.Figure()
 
-    colors = {"GREEN": "#22c55e", "YELLOW": "#f59e0b", "RED": "#ef4444"}
+    colors = {"GREEN": t["green"], "YELLOW": t["accent"], "RED": t["red"]}
     fig = go.Figure()
     for s in report.barometer_signals:
         fig.add_trace(go.Bar(
             x=[1], y=["Epistemic Posture"],
             orientation="h",
-            marker_color=colors.get(s.classification, "#f59e0b"),
+            marker_color=colors.get(s.classification, t["accent"]),
             hovertext=f"T{s.turn}: {s.classification} — {s.description[:50]}",
             hoverinfo="text",
             showlegend=False,
@@ -115,7 +113,7 @@ def build_barometer_detail(report, t: dict) -> go.Figure:
     if not report.barometer_signals:
         return go.Figure()
 
-    colors = {"GREEN": "#22c55e", "YELLOW": "#f59e0b", "RED": "#ef4444"}
+    colors = {"GREEN": t["green"], "YELLOW": t["accent"], "RED": t["red"]}
     fig = go.Figure()
     for cls in ["GREEN", "YELLOW", "RED"]:
         filtered = [s for s in report.barometer_signals if s.classification == cls]
@@ -133,8 +131,8 @@ def build_barometer_detail(report, t: dict) -> go.Figure:
         **layout,
         barmode="stack",
         height=320,
-        xaxis=dict(title="Turn", gridcolor="rgba(255,255,255,0.06)"),
-        yaxis=dict(title="Severity", gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(title="Turn", gridcolor=t["grid"]),
+        yaxis=dict(title="Severity", gridcolor=t["grid"]),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                     bgcolor="rgba(0,0,0,0)"),
     )
@@ -156,16 +154,16 @@ def build_persistence_fig(report, t: dict) -> go.Figure:
         fig.add_trace(go.Scatter(
             x=[event.correction_turn], y=[y_pos],
             mode="markers+text", text=["Correction"],
-            textposition="top center", textfont=dict(size=10, color="rgba(255,255,255,0.6)"),
-            marker=dict(size=14, color="#d68910", symbol="circle"),
+            textposition="top center", textfont=dict(size=10, color=t["chart_text"]),
+            marker=dict(size=14, color=t["accent"], symbol="circle"),
             showlegend=False, hoverinfo="text",
             hovertext=f"User corrected at T{event.correction_turn}",
         ))
         fig.add_trace(go.Scatter(
             x=[event.acknowledgment_turn], y=[y_pos],
             mode="markers+text", text=["Ack"],
-            textposition="top center", textfont=dict(size=10, color="rgba(255,255,255,0.6)"),
-            marker=dict(size=14, color="#22c55e", symbol="circle"),
+            textposition="top center", textfont=dict(size=10, color=t["chart_text"]),
+            marker=dict(size=14, color=t["green"], symbol="circle"),
             showlegend=False, hoverinfo="text",
             hovertext=f"Model acknowledged at T{event.acknowledgment_turn}",
         ))
@@ -173,7 +171,7 @@ def build_persistence_fig(report, t: dict) -> go.Figure:
             x=[event.correction_turn, event.acknowledgment_turn],
             y=[y_pos, y_pos],
             mode="lines",
-            line=dict(color="rgba(255,255,255,0.2)", width=2, dash="dot"),
+            line=dict(color=t["border_accent"], width=2, dash="dot"),
             showlegend=False, hoverinfo="skip",
         ))
 
@@ -181,8 +179,8 @@ def build_persistence_fig(report, t: dict) -> go.Figure:
             fig.add_trace(go.Scatter(
                 x=[event.failure_turn], y=[y_pos],
                 mode="markers+text", text=["Failed"],
-                textposition="top center", textfont=dict(size=10, color="#ef4444"),
-                marker=dict(size=16, color="#ef4444", symbol="x"),
+                textposition="top center", textfont=dict(size=10, color=t["red"]),
+                marker=dict(size=16, color=t["red"], symbol="x"),
                 showlegend=False, hoverinfo="text",
                 hovertext=f"Correction failed at T{event.failure_turn}",
             ))
@@ -190,15 +188,15 @@ def build_persistence_fig(report, t: dict) -> go.Figure:
                 x=[event.acknowledgment_turn, event.failure_turn],
                 y=[y_pos, y_pos],
                 mode="lines",
-                line=dict(color="#ef4444", width=2, dash="dash"),
+                line=dict(color=t["red"], width=2, dash="dash"),
                 showlegend=False, hoverinfo="skip",
             ))
         else:
             fig.add_trace(go.Scatter(
                 x=[event.acknowledgment_turn + 2], y=[y_pos],
                 mode="markers+text", text=["Held \u2713"],
-                textposition="middle right", textfont=dict(size=11, color="#22c55e"),
-                marker=dict(size=12, color="#22c55e", symbol="circle"),
+                textposition="middle right", textfont=dict(size=11, color=t["green"]),
+                marker=dict(size=12, color=t["green"], symbol="circle"),
                 showlegend=False, hoverinfo="text",
                 hovertext="Correction held across subsequent turns",
             ))
@@ -206,7 +204,7 @@ def build_persistence_fig(report, t: dict) -> go.Figure:
     fig.update_layout(
         **layout,
         height=max(180, len(events) * 80 + 60),
-        xaxis=dict(title="Turn", gridcolor="rgba(255,255,255,0.06)", zeroline=False),
+        xaxis=dict(title="Turn", gridcolor=t["grid"], zeroline=False),
         yaxis=dict(visible=False),
     )
     return fig
@@ -230,7 +228,7 @@ def build_commission_fig(report, t: dict) -> go.Figure:
     fig.update_layout(
         **layout,
         height=max(200, len(flags) * 45 + 60),
-        xaxis=dict(title="Severity", range=[0, 11], gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(title="Severity", range=[0, 11], gridcolor=t["grid"]),
         yaxis=dict(autorange="reversed"),
     )
     return fig
@@ -247,16 +245,16 @@ def build_omission_fig(report, t: dict) -> go.Figure:
         x=[f.turn for f in flags],
         y=[f.severity for f in flags],
         mode="lines+markers",
-        line=dict(color="#f59e0b", width=2),
-        marker=dict(size=8, color="#f59e0b"),
+        line=dict(color=t["accent"], width=2),
+        marker=dict(size=8, color=t["accent"]),
         hovertext=[f"T{f.turn}: {f.description[:60]}" for f in flags],
         hoverinfo="text",
     ))
     fig.update_layout(
         **layout,
         height=300,
-        xaxis=dict(title="Turn", gridcolor="rgba(255,255,255,0.06)"),
-        yaxis=dict(title="Severity", range=[0, 11], gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(title="Turn", gridcolor=t["grid"]),
+        yaxis=dict(title="Severity", range=[0, 11], gridcolor=t["grid"]),
     )
     return fig
 
@@ -291,23 +289,23 @@ def build_cumulative_drift_fig(report, t: dict) -> go.Figure | None:
         x=turns, y=cum_count,
         mode="lines",
         name="Cumulative Flags",
-        line=dict(color="#f59e0b", width=2),
+        line=dict(color=t["accent"], width=2),
         fill="tozeroy",
-        fillcolor="rgba(245,158,11,0.08)",
+        fillcolor=t["accent_glow"],
     ))
     fig.add_trace(go.Scatter(
         x=turns, y=cum_severity,
         mode="lines",
         name="Cumulative Severity",
-        line=dict(color="#ef4444", width=2, dash="dot"),
+        line=dict(color=t["red"], width=2, dash="dot"),
         yaxis="y2",
     ))
 
     fig.update_layout(
         **layout,
         height=300,
-        xaxis=dict(title="Turn", gridcolor="#2a2623", zeroline=False),
-        yaxis=dict(title="Flag Count", gridcolor="#2a2623", zeroline=False),
+        xaxis=dict(title="Turn", gridcolor=t["grid"], zeroline=False),
+        yaxis=dict(title="Flag Count", gridcolor=t["grid"], zeroline=False),
         yaxis2=dict(title="Total Severity", overlaying="y", side="right",
                     gridcolor="rgba(0,0,0,0)", zeroline=False),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
@@ -335,14 +333,8 @@ def build_tag_breakdown_fig(report, t: dict) -> go.Figure | None:
     counts = [tag_counts[tag] for tag in sorted_tags]
     avg_sev = [round(tag_severity[tag] / tag_counts[tag], 1) for tag in sorted_tags]
 
-    tag_colors_map = {
-        "SYCOPHANCY": "#ef4444", "REALITY_DISTORT": "#dc2626",
-        "CONF_INFLATE": "#f97316", "INSTR_DROP": "#f59e0b",
-        "SEM_DILUTE": "#eab308", "CORR_DECAY": "#a855f7",
-        "CONFLICT_PAIR": "#8b5cf6", "SHADOW_PATTERN": "#6366f1",
-        "OP_MOVE": "#3b82f6", "VOID_DETECTED": "#64748b",
-    }
-    colors = [tag_colors_map.get(tag, "#94a3b8") for tag in sorted_tags]
+    # Color encodes each tag's average severity on the calibrated ramp.
+    colors = [score_color(int(round(s)), t) for s in avg_sev]
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -357,7 +349,7 @@ def build_tag_breakdown_fig(report, t: dict) -> go.Figure | None:
     fig.update_layout(
         **layout,
         height=max(200, len(sorted_tags) * 40 + 60),
-        xaxis=dict(title="Flag Count", gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(title="Flag Count", gridcolor=t["grid"]),
         yaxis=dict(autorange="reversed"),
         showlegend=False,
     )
@@ -454,9 +446,9 @@ def build_frustration_line_fig(result, t: dict) -> go.Figure | None:
     fig.update_layout(
         **layout,
         height=280,
-        xaxis=dict(title="Conversation Turn", gridcolor="rgba(255,255,255,0.06)"),
+        xaxis=dict(title="Conversation Turn", gridcolor=t["grid"]),
         yaxis=dict(title="Frustration Score", range=[0, 10.5],
-                   gridcolor="rgba(255,255,255,0.06)"),
+                   gridcolor=t["grid"]),
         showlegend=False,
     )
     return fig

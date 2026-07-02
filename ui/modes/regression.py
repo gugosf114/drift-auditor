@@ -14,13 +14,13 @@ import plotly.graph_objects as go
 import pandas as pd
 import numpy as np
 
-from ui.theme import THEMES
-from ui.components import _racing_stickmen_html, chart_export_png
+from ui.theme import THEMES, DEFAULT_THEME
+from ui.components import _audit_progress_html, chart_export_png
 
 
 def render_regression_mode() -> None:
     """Render the Regression Analysis mode UI."""
-    T = THEMES[st.session_state.get("theme_name", "Ember")]
+    T = THEMES[DEFAULT_THEME]
     PLOTLY_LAYOUT = dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -28,12 +28,12 @@ def render_regression_mode() -> None:
         margin=dict(l=50, r=30, t=40, b=40),
     )
 
-    st.markdown("## 📊 Regression Analysis")
+    st.markdown("## Regression analysis")
     st.caption("Statistical patterns across 512 audited conversations — conversation length vs OLI, "
                "instruction count vs drift, model vs correction failure rate.")
 
     _reg_race = st.empty()
-    _reg_race.markdown(_racing_stickmen_html(T), unsafe_allow_html=True)
+    _reg_race.markdown(_audit_progress_html(T), unsafe_allow_html=True)
 
     # Load batch data
     batch_data = []
@@ -102,7 +102,7 @@ def render_regression_mode() -> None:
         fig1.add_trace(go.Scatter(
             x=x_trend, y=p(x_trend), mode="lines",
             name=f"Trend (slope={z[0]:.4f})",
-            line=dict(color="#f59e0b", width=3, dash="dash"),
+            line=dict(color=T["accent"], width=3, dash="dash"),
         ))
         corr = np.corrcoef(x_all[mask], y_all[mask])[0, 1]
         st.markdown(f"**Pearson r = {corr:.3f}** — "
@@ -136,7 +136,7 @@ def render_regression_mode() -> None:
         fig2.add_trace(go.Scatter(
             x=x2_trend, y=p2(x2_trend), mode="lines",
             name=f"Trend (slope={z2[0]:.4f})",
-            line=dict(color="#f59e0b", width=3, dash="dash"),
+            line=dict(color=T["accent"], width=3, dash="dash"),
         ))
         corr2 = np.corrcoef(x2[mask2], y2[mask2])[0, 1]
         st.markdown(f"**Pearson r = {corr2:.3f}** — "
@@ -160,7 +160,7 @@ def render_regression_mode() -> None:
         avg_drift=("overall_score", "mean"),
     ).reset_index()
     fig3 = go.Figure()
-    bar_colors = ["#f59e0b", "#22c55e", "#a855f7", "#3b82f6", "#ef4444"]
+    bar_colors = [T["accent"], T["green"], T["deep_red"], T["muted"], T["red"]]
     for i, (_, row) in enumerate(model_cfr.iterrows()):
         color = bar_colors[i % len(bar_colors)]
         fig3.add_trace(go.Bar(
@@ -202,7 +202,7 @@ def render_regression_mode() -> None:
         fig4.add_trace(go.Scatter(
             x=x4_trend, y=p4(x4_trend), mode="lines",
             name=f"Trend ({z4[0]:.2f} flags/msg)",
-            line=dict(color="#f59e0b", width=3, dash="dash"),
+            line=dict(color=T["accent"], width=3, dash="dash"),
         ))
         corr4 = np.corrcoef(x4[mask4], y4[mask4])[0, 1]
         st.markdown(f"**Pearson r = {corr4:.3f}** — "
@@ -218,7 +218,7 @@ def render_regression_mode() -> None:
     chart_export_png(fig4, "regression_length_vs_flags.png", "Download Scatter PNG")
 
     # Summary Stats Table
-    st.markdown("### Summary Statistics by Model")
+    st.markdown("### Summary statistics by model")
     summary = df.groupby("model").agg(
         conversations=("model", "count"),
         avg_messages=("message_count", "mean"),
@@ -237,7 +237,7 @@ def render_regression_mode() -> None:
     st.dataframe(summary, use_container_width=True, hide_index=True)
 
     # Key Findings
-    st.markdown("### Key Findings")
+    st.markdown("### Key findings")
     findings = []
     if mask.sum() > 2:
         corr_val = np.corrcoef(x_all[mask], y_all[mask])[0, 1]

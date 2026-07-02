@@ -4,14 +4,6 @@ plotly>=5.18.0
 pandas>=2.0.0
 vaderSentiment>=3.3.2
 
-# Optional: Semantic omission detection & conflict dedup (Layer 2)
-# Enables sentence embedding-based detection in detect_omission_local()
-# and semantic deduplication in detect_conflict_pairs().
-# The model (all-MiniLM-L6-v2) is 80MB and runs on CPU.
-# Falls back gracefully to keyword matching if not installed.
-sentence-transformers>=2.2.0
-torch>=2.0.0
-
 # PDF audit report export
 fpdf2>=2.7.0
 

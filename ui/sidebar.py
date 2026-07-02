@@ -6,7 +6,7 @@ Extracted from app.py. Returns a config dict consumed by mode renderers.
 import os
 import streamlit as st
 
-from ui.theme import THEMES
+from ui.theme import THEMES, DEFAULT_THEME
 
 
 def render_sidebar() -> dict:
@@ -14,7 +14,7 @@ def render_sidebar() -> dict:
     Render the full sidebar and return a config dict.
 
     Returns keys:
-        mode          — one of "📁 File Analysis", "⚡ Live Analysis", "📊 Regression", "🕸️ Mesh Runtime"
+        mode          — one of "File Analysis", "Live Analysis", "Regression", "Mesh Runtime"
         uploaded_file — UploadedFile or None
         system_prompt — str
         preferences   — str
@@ -23,17 +23,21 @@ def render_sidebar() -> dict:
         theme         — theme dict (THEMES[selected_name])
     """
     with st.sidebar:
-        st.markdown("## 🧪 Drift Auditor")
-        st.caption("Multi-turn drift diagnostic tool")
+        st.markdown(
+            '<div class="wordmark">Drift Auditor</div>'
+            '<div class="wordmark-eyebrow">Conversation forensics</div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown("")
 
         analysis_mode = st.radio(
             "Mode",
-            ["📁 File Analysis", "⚡ Live Analysis", "📊 Regression", "🕸️ Mesh Runtime"],
+            ["File Analysis", "Live Analysis", "Regression", "Mesh Runtime"],
             index=0,
             help="File: upload a conversation. Live: paste-as-you-go. Regression: batch analytics. Mesh: lossless nonlinear persistence runtime.",
         )
 
-        if analysis_mode == "📁 File Analysis":
+        if analysis_mode == "File Analysis":
             st.markdown("---")
             uploaded = st.file_uploader(
                 "Upload conversation",
@@ -95,7 +99,7 @@ def render_sidebar() -> dict:
             st.markdown("**Window Parameters**")
             window_size = st.slider("Window Size", 10, 100, 50, step=5)
             overlap = st.slider("Overlap", 0, 25, 10, step=1)
-        elif analysis_mode == "🕸️ Mesh Runtime":
+        elif analysis_mode == "Mesh Runtime":
             st.markdown("---")
             st.markdown("**Mesh Inputs**")
             mesh_uploaded_files = st.file_uploader(
@@ -169,7 +173,7 @@ def render_sidebar() -> dict:
             mesh_risk = 0.8
             mesh_continuity = 0.8
 
-        if analysis_mode != "🕸️ Mesh Runtime":
+        if analysis_mode != "Mesh Runtime":
             mesh_uploaded_files = []
             mesh_index_upload = None
             mesh_include_audit = True
@@ -212,21 +216,6 @@ def render_sidebar() -> dict:
 - **L4 Barometer**: Structural posture shifts (hedging, certainty swings)
 """)
 
-        # Theme — tucked at bottom in expander
-        st.markdown("---")
-        with st.expander("Theme", expanded=False):
-            _theme_choice = st.radio(
-                "Pick theme",
-                list(THEMES.keys()),
-                index=list(THEMES.keys()).index(st.session_state["theme_name"]),
-                horizontal=True,
-                key="_theme_radio",
-                label_visibility="collapsed",
-            )
-            if _theme_choice != st.session_state["theme_name"]:
-                st.session_state["theme_name"] = _theme_choice
-                st.rerun()
-
     return {
         "mode": analysis_mode,
         "uploaded_file": uploaded,
@@ -249,5 +238,5 @@ def render_sidebar() -> dict:
         "mesh_unresolved": mesh_unresolved,
         "mesh_risk": mesh_risk,
         "mesh_continuity": mesh_continuity,
-        "theme": THEMES[st.session_state["theme_name"]],
+        "theme": THEMES[DEFAULT_THEME],
     }

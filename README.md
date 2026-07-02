@@ -4,7 +4,7 @@
 
 Detects instructions that a language model silently stops following during a conversation. Not hallucination (saying wrong things). Not sycophancy (saying agreeable things). Omission: the model received an instruction, followed it initially, then quietly dropped it without acknowledgment.
 
-This is the behavior Anthropic's own disempowerment paper (January 28, 2026) identified as undetectable by current safeguards, which "operate primarily at individual exchange level" and "may miss behaviors that emerge across exchanges and over time."
+This is the behavior class Anthropic's own disempowerment paper (January 28, 2026) flags as a gap: current safeguards "operate primarily at the individual exchange level," which means they "may miss" behaviors that emerge across exchanges and over time.
 
 **Live demo:** [drift-auditor.streamlit.app](https://drift-auditor-3vghngnafvgkpqwdditewy.streamlit.app/)
 
@@ -72,7 +72,7 @@ Classifies the human's corrective actions — no existing tool does this:
 
 **Core Layers:**
 - Layer 1: Commission Detection (sycophancy, reality distortion, context gates)
-- Layer 2: Omission Detection (sentence-transformer semantic + barometer-assisted + API semantic)
+- Layer 2: Omission Detection (keyword-presence heuristics locally; LLM-as-judge semantic detection with `--api`)
 - Layer 3: Correction Persistence (did acknowledged fixes hold?)
 - Layer 4: Structural Drift Barometer (RED/YELLOW/GREEN epistemic posture)
 
@@ -218,7 +218,7 @@ Source research: "12 Rules for AI: An Operator's Field Manual" (29 pages, 17 aca
 
 ## Known Limitations
 
-- Layer 2 local mode uses sentence-transformer embeddings (all-MiniLM-L6-v2, 80MB) for semantic omission detection. Falls back to keyword matching if `sentence-transformers` is not installed. Use `--api` for Anthropic API-powered detection.
+- Layer 2 local mode is keyword-presence matching (does the instruction's vocabulary keep appearing in responses?), not semantic compliance checking. It can flag compliant responses that don't echo the instruction, and miss violations that do. Use `--api` for Anthropic API-powered semantic detection.
 - Layer 4 barometer patterns are heuristic surface markers, not actual model uncertainty.
 - Scoring weights are heuristic, not empirically calibrated.
 - Adversarial test generator requires Anthropic API key and is subject to rate limits.

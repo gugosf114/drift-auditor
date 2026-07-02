@@ -75,7 +75,7 @@ def _state_from_config(config: dict) -> RelationshipState:
 
 
 def render_mesh_runtime_mode(config: dict) -> None:
-    st.markdown("## 🕸️ Mesh Runtime")
+    st.markdown("## Mesh runtime")
     st.caption(
         "Lossless persistence layer: compile episodes, query across nonlinear context, and generate injectable control frames."
     )
@@ -95,7 +95,7 @@ def render_mesh_runtime_mode(config: dict) -> None:
         "drift-auditor/examples": str(repo_root / "examples"),
     }
 
-    st.markdown("### One-Click Batch Import")
+    st.markdown("### One-click batch import")
     p1, p2, p3 = st.columns([2, 1, 1])
     with p1:
         preset_name = st.selectbox("Preset source", list(preset_map.keys()), index=0)
@@ -188,7 +188,7 @@ def render_mesh_runtime_mode(config: dict) -> None:
 
         frame = build_control_frame(state=state, hits=hits, query=query)
 
-        st.markdown("### Retrieval Hits")
+        st.markdown("### Retrieval hits")
         if not hits:
             st.warning("No hits. Try broader query terms or compile more transcripts.")
         else:
@@ -201,7 +201,7 @@ def render_mesh_runtime_mode(config: dict) -> None:
                         st.write("Open loops:", hit.open_loops[:3])
                     st.text_area("Excerpt", value=hit.excerpt, height=120, key=f"mesh_ex_{i}")
 
-        st.markdown("### Control Frame (Injectable)")
+        st.markdown("### Control frame (injectable)")
         frame_json = json.dumps(frame, indent=2, ensure_ascii=False)
         st.code(frame_json, language="json")
         st.download_button(
@@ -212,7 +212,7 @@ def render_mesh_runtime_mode(config: dict) -> None:
             use_container_width=True,
         )
 
-    st.markdown("### Export Mesh Index")
+    st.markdown("### Export mesh index")
     payload_json = json.dumps(payload, ensure_ascii=False, indent=2)
     st.download_button(
         "Download Mesh Index JSON",
@@ -222,7 +222,7 @@ def render_mesh_runtime_mode(config: dict) -> None:
         use_container_width=True,
     )
 
-    st.markdown("### Bootstrap Compiler")
+    st.markdown("### Bootstrap compiler")
     b1, b2, b3 = st.columns([1, 1, 1])
     with b1:
         max_words = st.slider("Bootstrap max words", 120, 900, 500, step=20)

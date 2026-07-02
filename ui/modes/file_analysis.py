@@ -20,7 +20,7 @@ from operator_load import compute_operator_load
 from detectors.frustration import compute_frustration_index
 from parsers.chat_parser import parse_chat_log as _parse_for_frustration
 from ui.theme import THEMES, score_color, score_label
-from ui.components import render_metric_card, _racing_stickmen_html, chart_export_png
+from ui.components import render_metric_card, render_hero_readout, _audit_progress_html, chart_export_png
 from ui.charts import (
     build_timeline_fig, build_barometer_strip, build_barometer_detail,
     build_persistence_fig, build_commission_fig, build_omission_fig,
@@ -57,7 +57,7 @@ def render_file_analysis_mode(config: dict) -> None:
     PLOTLY_LAYOUT = dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=T["chart_text"], family="JetBrains Mono, DM Sans, sans-serif", size=12),
+        font=dict(color=T["chart_text"], family="IBM Plex Mono, IBM Plex Sans, monospace", size=12),
         margin=dict(l=50, r=30, t=40, b=40),
     )
 
@@ -78,7 +78,7 @@ def render_file_analysis_mode(config: dict) -> None:
         conv_id = "sample_conversation.txt"
 
     if raw_bytes is None:
-        st.markdown("## 🧪 Drift Auditor")
+        st.markdown("## Drift Auditor")
         st.markdown(
             "Upload a Claude conversation export or **load the sample** from the sidebar "
             "to analyze multi-turn drift patterns."
@@ -88,7 +88,7 @@ def render_file_analysis_mode(config: dict) -> None:
 
     # Run audit
     race_placeholder = st.empty()
-    race_placeholder.markdown(_racing_stickmen_html(T), unsafe_allow_html=True)
+    race_placeholder.markdown(_audit_progress_html(T), unsafe_allow_html=True)
     try:
         report: AuditReport = run_audit(raw_bytes, system_prompt, preferences, window_size, overlap, conv_id)
     except Exception as exc:
@@ -109,11 +109,11 @@ def render_file_analysis_mode(config: dict) -> None:
     scores = report.summary_scores
 
     # Dashboard — Summary metrics
-    st.markdown("## 🧪 Drift Audit Results")
+    st.markdown("## Audit results")
     overall = scores.get("overall_drift_score", 1)
-    hero_col, c1, c2, c3, c4 = st.columns(5)
+    hero_col, c1, c2, c3, c4 = st.columns([2, 1, 1, 1, 1])
     with hero_col:
-        render_metric_card("Overall Drift", overall, score_label(overall), T)
+        render_hero_readout("Overall drift", overall, score_label(overall), T)
     LAYER_METRICS = [
         ("L1: Commission", "commission_score", lambda s: f"{s.get('commission_flag_count', 0)} flags"),
         ("L2: Omission", "omission_score", lambda s: f"{s.get('omission_flag_count', 0)} flags"),
@@ -173,7 +173,7 @@ def render_file_analysis_mode(config: dict) -> None:
 
     if frustration.per_turn:
         st.markdown("---")
-        st.subheader("🧪 Frustration Index")
+        st.subheader("Frustration index")
         st.caption("Experimental proxy — operator message sentiment (keyword + VADER).")
         frust_gauge_col, frust_chart_col = st.columns([1, 3])
         with frust_gauge_col:
@@ -188,13 +188,13 @@ def render_file_analysis_mode(config: dict) -> None:
     sparks = generate_spark_ideas(report, frustration if frustration.per_turn else None)
     if sparks:
         st.markdown("---")
-        st.subheader("✨ Spark Ideas")
+        st.subheader("Notable moments")
         st.caption("Notable moments and patterns from this conversation.")
         for spark in sparks:
             st.markdown(f"- {spark}")
 
     # Drift Timeline
-    st.subheader("Drift Timeline")
+    st.subheader("Drift timeline")
     timeline_fig = build_timeline_fig(report, T)
     if report.commission_flags or report.omission_flags or report.correction_events:
         st.plotly_chart(timeline_fig, use_container_width=True, config={"displaylogo": False})
@@ -208,20 +208,20 @@ def render_file_analysis_mode(config: dict) -> None:
 
     cum_fig = build_cumulative_drift_fig(report, T)
     if cum_fig is not None:
-        st.subheader("Drift Accumulation")
+        st.subheader("Drift accumulation")
         st.plotly_chart(cum_fig, use_container_width=True, config={"displaylogo": False})
         chart_export_png(cum_fig, f"drift_accumulation_{report.conversation_id}.png", "Download Accumulation PNG")
 
     tag_fig = build_tag_breakdown_fig(report, T)
     if tag_fig is not None:
-        st.subheader("Tag Breakdown")
+        st.subheader("Tag breakdown")
         st.plotly_chart(tag_fig, use_container_width=True, config={"displaylogo": False})
         chart_export_png(tag_fig, f"tag_breakdown_{report.conversation_id}.png", "Download Tag Breakdown PNG")
 
     # Detail Tabs
     tab_lifecycle, tab_baro, tab_persist, tab_comm, tab_omit, tab_struct, tab_operator = st.tabs(
-        ["📋 Lifecycle", "🧠 Barometer", "🔄 Persistence",
-         "🚩 Commission", "📜 Omission", "🔍 Structural", "🎯 Operator"]
+        ["Lifecycle", "Barometer", "Persistence",
+         "Commission", "Omission", "Structural", "Operator"]
     )
 
     # Lifecycle Tab
@@ -229,66 +229,65 @@ def render_file_analysis_mode(config: dict) -> None:
         st.caption("Per-instruction tracking: when given, when followed, when dropped, coupling score.")
         if report.instruction_lifecycles:
             lc_fig = go.Figure()
-            statuses = {"active": "#22c55e", "omitted": "#ef4444", "degraded": "#f59e0b", "superseded": "#666"}
+            statuses = {"active": T["green"], "omitted": T["red"], "degraded": T["accent"], "superseded": T["muted"]}
             for i, lc in enumerate(report.instruction_lifecycles):
                 y_pos = len(report.instruction_lifecycles) - i
                 color = statuses.get(lc.status, "#888")
                 label = lc.instruction_text[:40] + ("..." if len(lc.instruction_text) > 40 else "")
                 lc_fig.add_trace(go.Scatter(
                     x=[lc.turn_given], y=[y_pos], mode="markers",
-                    marker=dict(size=12, color="#22c55e", symbol="circle"),
+                    marker=dict(size=12, color=T["green"], symbol="circle"),
                     showlegend=False, hoverinfo="text",
                     hovertext=f"Given at T{lc.turn_given}: {lc.instruction_text[:60]}",
                 ))
                 if lc.turn_last_followed is not None:
                     lc_fig.add_trace(go.Scatter(
                         x=[lc.turn_last_followed], y=[y_pos], mode="markers",
-                        marker=dict(size=12, color="#22c55e", symbol="diamond"),
+                        marker=dict(size=12, color=T["green"], symbol="diamond"),
                         showlegend=False, hoverinfo="text",
                         hovertext=f"Last followed at T{lc.turn_last_followed}",
                     ))
                     lc_fig.add_trace(go.Scatter(
                         x=[lc.turn_given, lc.turn_last_followed], y=[y_pos, y_pos],
-                        mode="lines", line=dict(color="#22c55e", width=3),
+                        mode="lines", line=dict(color=T["green"], width=3),
                         showlegend=False, hoverinfo="skip",
                     ))
                 if lc.turn_first_omitted is not None:
                     lc_fig.add_trace(go.Scatter(
                         x=[lc.turn_first_omitted], y=[y_pos], mode="markers",
-                        marker=dict(size=14, color="#ef4444", symbol="x"),
+                        marker=dict(size=14, color=T["red"], symbol="x"),
                         showlegend=False, hoverinfo="text",
                         hovertext=f"First omitted at T{lc.turn_first_omitted}",
                     ))
                     end_pt = lc.turn_last_followed if lc.turn_last_followed else lc.turn_given
                     lc_fig.add_trace(go.Scatter(
                         x=[end_pt, lc.turn_first_omitted], y=[y_pos, y_pos],
-                        mode="lines", line=dict(color="#ef4444", width=2, dash="dash"),
+                        mode="lines", line=dict(color=T["red"], width=2, dash="dash"),
                         showlegend=False, hoverinfo="skip",
                     ))
                 lc_fig.add_annotation(x=-0.5, y=y_pos, text=label, showarrow=False,
                     xanchor="right", font=dict(size=10, color=color))
             lc_fig.update_layout(**PLOTLY_LAYOUT,
                 height=max(300, len(report.instruction_lifecycles) * 55 + 80),
-                xaxis=dict(title="Turn", gridcolor="rgba(255,255,255,0.06)", zeroline=False),
+                xaxis=dict(title="Turn", gridcolor=T["grid"], zeroline=False),
                 yaxis=dict(visible=False), margin=dict(l=250, r=30, t=40, b=40),
             )
             st.plotly_chart(lc_fig, use_container_width=True, config={"displaylogo": False})
 
             st.markdown("**Instruction Details**")
             for lc in report.instruction_lifecycles:
-                sc = {"active": "#22c55e", "omitted": "#ef4444",
-                      "degraded": "#f59e0b", "superseded": "#666"}.get(lc.status, "#888")
+                sc = statuses.get(lc.status, T["muted"])
                 st.markdown(f"""
                 <div class="event-card" style="border-left: 3px solid {sc}">
                     <span style="color: {sc}; font-weight: 700">{lc.status.upper()}</span>
-                    <span style="color: rgba(255,255,255,0.5); margin-left: 8px">
+                    <span style="color: rgba(222,228,234,0.55); margin-left: 8px">
                         coupling: {lc.coupling_score:.2f} | {lc.position_in_conversation} | {lc.source}
                     </span>
-                    <br><span style="color: rgba(255,255,255,0.8)">{lc.instruction_text[:120]}</span>
-                    <br><small style="color: rgba(255,255,255,0.4)">
+                    <br><span style="color: rgba(222,228,234,0.85)">{lc.instruction_text[:120]}</span>
+                    <br><small style="color: rgba(222,228,234,0.45)">
                         Given T{lc.turn_given}
                         {'&rarr; Last followed T' + str(lc.turn_last_followed) if lc.turn_last_followed is not None else ''}
-                        {'&rarr; <span style="color:#ef4444">Omitted T' + str(lc.turn_first_omitted) + '</span>' if lc.turn_first_omitted is not None else ''}
+                        {'&rarr; <span style="color:' + T['red'] + '">Omitted T' + str(lc.turn_first_omitted) + '</span>' if lc.turn_first_omitted is not None else ''}
                     </small>
                 </div>""", unsafe_allow_html=True)
 
@@ -306,7 +305,7 @@ def render_file_analysis_mode(config: dict) -> None:
                             rate = data.get("rate", 0)
                             label_map = {"edge_start": "Start (first 20%)",
                                          "middle": "Middle (20-80%)", "edge_end": "End (last 20%)"}
-                            rate_color = "#ef4444" if rate > 0.5 else "#f59e0b" if rate > 0.2 else "#22c55e"
+                            rate_color = T["red"] if rate > 0.5 else T["accent"] if rate > 0.2 else T["green"]
                             st.markdown(f"""
                             <div class="glass-card">
                                 <div class="metric-label">{label_map.get(pos_name, pos_name)}</div>
@@ -330,9 +329,9 @@ def render_file_analysis_mode(config: dict) -> None:
         green_signals = [s for s in report.barometer_signals if s.classification == "GREEN"]
         bc1, bc2, bc3 = st.columns(3)
         for col, label, signals, color in [
-            (bc1, "RED", red_signals, "#ef4444"),
-            (bc2, "YELLOW", yellow_signals, "#f59e0b"),
-            (bc3, "GREEN", green_signals, "#22c55e"),
+            (bc1, "RED", red_signals, T["red"]),
+            (bc2, "YELLOW", yellow_signals, T["accent"]),
+            (bc3, "GREEN", green_signals, T["green"]),
         ]:
             descs = {"RED": "Active structural drift", "YELLOW": "Passive drift / hedging", "GREEN": "Healthy posture"}
             with col:
@@ -367,12 +366,12 @@ def render_file_analysis_mode(config: dict) -> None:
                 held_html = '<span class="status-held">HELD ✓</span>' if event.held else \
                             f'<span class="status-failed">FAILED at turn {event.failure_turn}</span>'
                 st.markdown(f"""
-                <div class="event-card" style="border-left: 3px solid {'#22c55e' if event.held else '#ef4444'}">
+                <div class="event-card" style="border-left: 3px solid {T['green'] if event.held else T['red']}">
                     {held_html}
-                    <br><span style="color: rgba(255,255,255,0.6)">
+                    <br><span style="color: rgba(222,228,234,0.65)">
                         Turn {event.correction_turn} → Ack {event.acknowledgment_turn}
                     </span>
-                    <br><small style="color: rgba(255,255,255,0.4)">{event.instruction[:150]}</small>
+                    <br><small style="color: rgba(222,228,234,0.45)">{event.instruction[:150]}</small>
                 </div>""", unsafe_allow_html=True)
         else:
             st.info("No correction events detected in this conversation.")
@@ -428,14 +427,14 @@ def render_file_analysis_mode(config: dict) -> None:
                     chain_html = ""
                     for step, key in zip(steps, step_keys):
                         ok = v.chain_status.get(key, False)
-                        color = "#22c55e" if ok else "#ef4444"
+                        color = T["green"] if ok else T["red"]
                         icon = "&#10003;" if ok else "&#10007;"
                         chain_html += f'<span style="color:{color}">{icon} {step}</span> '
                     st.markdown(f"""
-                    <div class="event-card" style="border-left: 3px solid #ef4444">
-                        <span style="color: rgba(255,255,255,0.8)">{v.instruction_text[:80]}</span>
+                    <div class="event-card" style="border-left: 3px solid {T["red"]}">
+                        <span style="color: rgba(222,228,234,0.85)">{v.instruction_text[:80]}</span>
                         <br>{chain_html}
-                        <br><small style="color: #ef4444">Void at: {v.void_at}</small>
+                        <br><small style="color: {T["red"]}">Void at: {v.void_at}</small>
                     </div>""", unsafe_allow_html=True)
             else:
                 st.success("No causal chain breaks detected.")
@@ -444,11 +443,11 @@ def render_file_analysis_mode(config: dict) -> None:
             if report.conflict_pairs:
                 for cp in report.conflict_pairs:
                     st.markdown(f"""
-                    <div class="event-card" style="border-left: 3px solid #a855f7">
-                        <span style="color: #a855f7; font-weight: 700">T{cp.turn_a} vs T{cp.turn_b}</span>
-                        <span style="color: rgba(255,255,255,0.5)"> | sev {cp.severity} | {cp.topic}</span>
-                        <br><small style="color: rgba(255,255,255,0.6)">A: {cp.statement_a[:100]}</small>
-                        <br><small style="color: rgba(255,255,255,0.6)">B: {cp.statement_b[:100]}</small>
+                    <div class="event-card" style="border-left: 3px solid {T["deep_red"]}">
+                        <span style="color: {T["deep_red"]}; font-weight: 600">T{cp.turn_a} vs T{cp.turn_b}</span>
+                        <span style="color: rgba(222,228,234,0.55)"> | sev {cp.severity} | {cp.topic}</span>
+                        <br><small style="color: rgba(222,228,234,0.65)">A: {cp.statement_a[:100]}</small>
+                        <br><small style="color: rgba(222,228,234,0.65)">B: {cp.statement_b[:100]}</small>
                     </div>""", unsafe_allow_html=True)
             else:
                 st.success("No contradictions detected.")
@@ -459,9 +458,9 @@ def render_file_analysis_mode(config: dict) -> None:
             if report.shadow_patterns:
                 for sp in report.shadow_patterns:
                     st.markdown(f"""
-                    <div class="event-card" style="border-left: 3px solid #f59e0b">
-                        <span style="color: #f59e0b; font-weight: 700">{sp.pattern_description}</span>
-                        <br><span style="color: rgba(255,255,255,0.5)">
+                    <div class="event-card" style="border-left: 3px solid {T["accent"]}">
+                        <span style="color: {T["accent"]}; font-weight: 600">{sp.pattern_description}</span>
+                        <br><span style="color: rgba(222,228,234,0.55)">
                             Seen {sp.frequency}x | sev {sp.severity} | Turns: {sp.turns_observed[:8]}
                         </span>
                     </div>""", unsafe_allow_html=True)
@@ -472,10 +471,10 @@ def render_file_analysis_mode(config: dict) -> None:
             if report.pre_drift_signals:
                 for f in report.pre_drift_signals:
                     st.markdown(f"""
-                    <div class="event-card" style="border-left: 3px solid #d68910">
-                        <span style="color: #d68910; font-weight: 700">Turn {f.turn}</span>
-                        <span style="color: rgba(255,255,255,0.5)"> | sev {f.severity}</span>
-                        <br><span style="color: rgba(255,255,255,0.7)">{f.description}</span>
+                    <div class="event-card" style="border-left: 3px solid {T["accent"]}">
+                        <span style="color: {T["accent"]}; font-weight: 600">Turn {f.turn}</span>
+                        <span style="color: rgba(222,228,234,0.55)"> | sev {f.severity}</span>
+                        <br><span style="color: rgba(222,228,234,0.75)">{f.description}</span>
                     </div>""", unsafe_allow_html=True)
             else:
                 st.success("No pre-drift indicators detected.")
@@ -496,12 +495,12 @@ def render_file_analysis_mode(config: dict) -> None:
             rule_eff = [rule_effective.get(r, 0) for r in rule_names]
             rule_fig = go.Figure()
             rule_fig.add_trace(go.Bar(y=rule_names, x=rule_totals, orientation="h",
-                name="Total", marker_color="rgba(255,255,255,0.15)"))
+                name="Total", marker_color=T["border_accent"]))
             rule_fig.add_trace(go.Bar(y=rule_names, x=rule_eff, orientation="h",
-                name="Effective", marker_color="#22c55e"))
+                name="Effective", marker_color=T["green"]))
             rule_fig.update_layout(**PLOTLY_LAYOUT, barmode="overlay",
                 height=max(200, len(rule_names) * 40 + 60),
-                xaxis=dict(title="Count", gridcolor="rgba(255,255,255,0.06)"),
+                xaxis=dict(title="Count", gridcolor=T["grid"]),
                 yaxis=dict(autorange="reversed"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
                             bgcolor="rgba(0,0,0,0)"),
@@ -524,14 +523,14 @@ def render_file_analysis_mode(config: dict) -> None:
             }
             st.markdown("**Move Details**")
             for m in report.op_moves:
-                eff_color = {"effective": "#22c55e", "partially_effective": "#f59e0b",
-                             "ineffective": "#ef4444", "unknown": "#666"}.get(m.effectiveness, "#666")
+                eff_color = {"effective": T["green"], "partially_effective": T["accent"],
+                             "ineffective": T["red"], "unknown": T["muted"]}.get(m.effectiveness, T["muted"])
                 st.markdown(f"""
                 <div class="event-card" style="border-left: 3px solid {eff_color}">
                     <span style="color: {eff_color}; font-weight: 700">{m.rule}</span>
-                    <span style="color: rgba(255,255,255,0.4)"> | {RULE_DESCRIPTIONS.get(m.rule, '')}</span>
-                    <br><span style="color: rgba(255,255,255,0.5)">Turn {m.turn} | {m.effectiveness}</span>
-                    <br><small style="color: rgba(255,255,255,0.6)">{m.target_behavior[:120]}</small>
+                    <span style="color: rgba(222,228,234,0.45)"> | {RULE_DESCRIPTIONS.get(m.rule, '')}</span>
+                    <br><span style="color: rgba(222,228,234,0.55)">Turn {m.turn} | {m.effectiveness}</span>
+                    <br><small style="color: rgba(222,228,234,0.65)">{m.target_behavior[:120]}</small>
                 </div>""", unsafe_allow_html=True)
         else:
             st.info("No operator steering moves detected in this conversation.")
@@ -556,7 +555,7 @@ def render_file_analysis_mode(config: dict) -> None:
 
     # Cross-Model Leaderboard
     st.divider()
-    st.subheader("Cross-Model Drift Leaderboard")
+    st.subheader("Cross-model drift leaderboard")
     leaderboard_data = []
     repo_root = os.path.dirname(os.path.abspath(__file__))
     for _ in range(2):
@@ -613,11 +612,11 @@ def render_file_analysis_mode(config: dict) -> None:
             x=[r["Model"] for r in lb_rows], y=lb_chart_scores,
             marker_color=[score_color(int(s), T) for s in lb_chart_scores],
             text=[f"{s:.1f}" for s in lb_chart_scores], textposition="outside",
-            textfont=dict(color="#e8dfd0"),
+            textfont=dict(color=T["text"]),
         ))
         lb_fig.update_layout(**PLOTLY_LAYOUT, height=350,
-            xaxis=dict(title="Model", gridcolor="#2a2623"),
-            yaxis=dict(title="Avg Drift Score", range=[0, 10], gridcolor="#2a2623"),
+            xaxis=dict(title="Model", gridcolor=T["grid"]),
+            yaxis=dict(title="Avg Drift Score", range=[0, 10], gridcolor=T["grid"]),
         )
         st.plotly_chart(lb_fig, use_container_width=True, config={"displaylogo": False})
         total_convs = sum(r["Conversations"] for r in lb_rows)
@@ -628,7 +627,7 @@ def render_file_analysis_mode(config: dict) -> None:
 
     # Export
     st.divider()
-    st.subheader("Export Report")
+    st.subheader("Export report")
     exp1, exp2, exp3 = st.columns(3)
     with exp1:
         st.download_button(

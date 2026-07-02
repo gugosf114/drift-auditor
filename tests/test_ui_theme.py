@@ -9,26 +9,26 @@ from theme import THEMES, DEFAULT_THEME, score_color, score_label, _build_css, g
 
 class TestScoreColor:
     def test_low_score_is_green(self):
-        t = THEMES["Ember"]
+        t = THEMES["Ledger"]
         assert score_color(1, t) == t["green"]
         assert score_color(3, t) == t["green"]
 
     def test_medium_score_is_accent(self):
-        t = THEMES["Ember"]
+        t = THEMES["Ledger"]
         assert score_color(4, t) == t["accent"]
         assert score_color(5, t) == t["accent"]
 
     def test_high_score_is_red(self):
-        t = THEMES["Ember"]
+        t = THEMES["Ledger"]
         assert score_color(6, t) == t["red"]
         assert score_color(7, t) == t["red"]
 
     def test_severe_score_is_deep_red(self):
-        t = THEMES["Ember"]
+        t = THEMES["Ledger"]
         assert score_color(8, t) == t["deep_red"]
         assert score_color(10, t) == t["deep_red"]
 
-    def test_defaults_to_ember_theme(self):
+    def test_defaults_to_ledger_theme(self):
         """score_color without a theme arg should not raise."""
         result = score_color(5)
         assert isinstance(result, str)
@@ -66,23 +66,23 @@ class TestScoreLabel:
 
 class TestBuildCss:
     def test_returns_non_empty_string(self):
-        css = _build_css(THEMES["Ember"])
+        css = _build_css(THEMES["Ledger"])
         assert isinstance(css, str)
         assert len(css) > 100
 
     def test_contains_style_tags(self):
-        css = _build_css(THEMES["Ember"])
+        css = _build_css(THEMES["Ledger"])
         assert "<style>" in css
         assert "</style>" in css
 
     def test_contains_expected_classes(self):
-        css = _build_css(THEMES["Ember"])
+        css = _build_css(THEMES["Ledger"])
         assert ".glass-card" in css
         assert ".metric-value" in css
         assert ".metric-label" in css
 
     def test_injects_theme_colors(self):
-        t = THEMES["Ember"]
+        t = THEMES["Ledger"]
         css = _build_css(t)
         assert t["bg"] in css
         assert t["accent"] in css
@@ -96,18 +96,18 @@ class TestBuildCss:
 
 class TestGetPlotlyLayout:
     def test_returns_dict(self):
-        layout = get_plotly_layout(THEMES["Ember"])
+        layout = get_plotly_layout(THEMES["Ledger"])
         assert isinstance(layout, dict)
 
     def test_contains_required_keys(self):
-        layout = get_plotly_layout(THEMES["Ember"])
+        layout = get_plotly_layout(THEMES["Ledger"])
         assert "paper_bgcolor" in layout
         assert "plot_bgcolor" in layout
         assert "font" in layout
         assert "margin" in layout
 
     def test_font_uses_theme_chart_text(self):
-        t = THEMES["Midnight"]
+        t = THEMES["Ledger"]
         layout = get_plotly_layout(t)
         assert layout["font"]["color"] == t["chart_text"]
 
@@ -126,5 +126,5 @@ class TestThemesStructure:
     def test_default_theme_exists(self):
         assert DEFAULT_THEME in THEMES
 
-    def test_five_themes_defined(self):
-        assert len(THEMES) == 5
+    def test_single_theme_defined(self):
+        assert len(THEMES) == 1
