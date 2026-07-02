@@ -91,6 +91,7 @@ class DriftFlag:
     operator_rule: Optional[str] = None    # OperatorRule that caught it
     coupling_score: Optional[float] = None # 0.0-1.0 downstream impact weight
     counterfactual: Optional[str] = None   # PREVENTABLE / SYSTEMIC / INDETERMINATE
+    verified: Optional[bool] = None        # True = LLM judge confirmed; None = unverified/unclear
 
 @dataclass
 class CorrectionEvent:

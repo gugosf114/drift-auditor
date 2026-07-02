@@ -26,9 +26,13 @@ class OmissionDetector(BaseDetector):
         window_barometer = kwargs.get("window_barometer", [])
         
         flags = detect_omission_local(window, active_instructions, window_barometer)
-        
+
+        # Per-(instruction x turn) API detection is opt-in: it makes one
+        # uncapped call per pair, which gets expensive fast. The default
+        # semantic path is the stage-2 verifier (src/verifier.py), which is
+        # capped and reviews candidates instead of every pair.
         api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if api_key:
+        if api_key and os.environ.get("DRIFT_OMISSION_API") == "1":
             for turn in window:
                 if turn["role"] != "assistant":
                     continue

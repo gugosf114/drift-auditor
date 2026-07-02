@@ -19,7 +19,7 @@ from drift_auditor import (
 from operator_load import compute_operator_load
 from detectors.frustration import compute_frustration_index
 from parsers.chat_parser import parse_chat_log as _parse_for_frustration
-from ui.theme import THEMES, score_color, score_label
+from ui.theme import THEMES, DEFAULT_THEME, score_color, score_label
 from ui.components import render_metric_card, render_hero_readout, _audit_progress_html, chart_export_png
 from ui.charts import (
     build_timeline_fig, build_barometer_strip, build_barometer_detail,
@@ -53,7 +53,7 @@ def run_audit(
 
 def render_file_analysis_mode(config: dict) -> None:
     """Render the File Analysis mode UI."""
-    T = THEMES[st.session_state.get("theme_name", "Ember")]
+    T = THEMES[DEFAULT_THEME]
     PLOTLY_LAYOUT = dict(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
@@ -66,6 +66,14 @@ def render_file_analysis_mode(config: dict) -> None:
     preferences = config.get("preferences", "")
     window_size = config.get("window_size", 50)
     overlap = config.get("overlap", 10)
+
+    # Bridge Streamlit Cloud secrets into the env so the engine's key
+    # resolution chain (env -> Secret Manager -> gcloud) can see them.
+    try:
+        if "ANTHROPIC_API_KEY" in st.secrets and not os.environ.get("ANTHROPIC_API_KEY"):
+            os.environ["ANTHROPIC_API_KEY"] = st.secrets["ANTHROPIC_API_KEY"]
+    except Exception:
+        pass
 
     raw_bytes: bytes | None = None
     conv_id = "unknown"
@@ -110,6 +118,18 @@ def render_file_analysis_mode(config: dict) -> None:
 
     # Dashboard — Summary metrics
     st.markdown("## Audit results")
+    _verif = report.metadata.get("verification", {}) if isinstance(report.metadata, dict) else {}
+    if _verif.get("enabled"):
+        st.caption(
+            f"Two-stage detection: {_verif.get('candidates', 0)} keyword candidates reviewed by "
+            f"{_verif.get('model', 'LLM')} — {_verif.get('confirmed', 0)} confirmed, "
+            f"{_verif.get('refuted', 0)} false alarms removed, {_verif.get('unclear', 0)} unclear (kept)."
+        )
+    else:
+        st.caption(
+            "Keyword-heuristic detection (unverified). Add an ANTHROPIC_API_KEY "
+            "(env, Streamlit secret, or Secret Manager) to enable LLM verification of findings."
+        )
     overall = scores.get("overall_drift_score", 1)
     hero_col, c1, c2, c3, c4 = st.columns([2, 1, 1, 1, 1])
     with hero_col:

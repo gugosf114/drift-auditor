@@ -80,7 +80,8 @@ def audit_conversation(
     user_preferences: str = "",
     window_size: int = 50,
     overlap: int = 10,
-    conversation_id: str = "unknown"
+    conversation_id: str = "unknown",
+    api_verify: bool | None = None,
 ) -> AuditReport:
     """
     Full audit pipeline with sliding window for long conversations.
@@ -228,6 +229,15 @@ def audit_conversation(
         if f.instruction_ref and f.instruction_ref in coupling_map:
             f.coupling_score = coupling_map[f.instruction_ref]
 
+    # Stage-2 verification: LLM judge reviews keyword candidates before
+    # scoring. Auto-enabled when an API key resolves; refuted flags are
+    # dropped so scores reflect verified drift.
+    verification = {"enabled": False, "reason": "disabled"}
+    if api_verify is not False:
+        from verifier import verify_report, resolve_api_key
+        if api_verify or resolve_api_key():
+            verification = verify_report(report, turns)
+
     # Score
     report.summary_scores = compute_scores(report)
 
@@ -253,6 +263,7 @@ def audit_conversation(
                         "judge_mode", "rumsfeld"],
         },
         "rumsfeld_classification": rumsfeld,
+        "verification": verification,
     }
 
     return report
@@ -278,6 +289,10 @@ def main():
                         help="Sliding window size in turns (default: 50)")
     parser.add_argument("--overlap", type=int, default=10,
                         help="Window overlap in turns (default: 10)")
+    parser.add_argument("--verify", dest="verify", action="store_true", default=None,
+                        help="Force LLM-judge verification of keyword findings (requires API key)")
+    parser.add_argument("--no-verify", dest="verify", action="store_false",
+                        help="Disable LLM-judge verification even if an API key is available")
 
     args = parser.parse_args()
 
@@ -304,7 +319,8 @@ def main():
         user_preferences=user_preferences,
         window_size=args.window,
         overlap=args.overlap,
-        conversation_id=conv_id
+        conversation_id=conv_id,
+        api_verify=args.verify,
     )
 
     # Output

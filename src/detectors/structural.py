@@ -170,7 +170,9 @@ def detect_barometer_signals(turns: list[dict]) -> list[BarometerSignal]:
 
 # Patterns that indicate a user correction
 USER_CORRECTION_PATTERNS = [
-    r"(?:no|wrong|incorrect|that'?s not|you'?re not|I (?:said|told|asked|meant))",
+    # Word-boundaried: bare "no" only counts sentence-initially, so "I know",
+    # "now", and "normal" no longer register as corrections.
+    r"(?:^\s*no\b|[.!?]\s+no\b|\bwrong\b|\bincorrect\b|that'?s not|you'?re not|\bI (?:said|told|asked|meant)\b)",
     r"(?:why did you|why didn'?t you|you (?:forgot|missed|dropped|ignored|skipped))",
     r"(?:I already|I just|we just|we already)\s+(?:said|told|explained|discussed|covered)",
     r"(?:that'?s|this is|you'?re)\s+(?:drift|drifting|sycophancy|sycophantic|hallucin)",

@@ -30,7 +30,7 @@ A model that scores clean because the operator corrected it 741 times isn't safe
 | Instruction Survival Rate | 56.5% | 45.3% |
 | Correction Efficiency | 98.7% | 100.0% |
 
-**The finding:** Claude and ChatGPT tie on drift score — but fail differently. Claude is high-maintenance, high-fidelity (needs more babysitting but retains more instructions). ChatGPT is low-maintenance, silent decay (runs quieter but silently drops 55% of instructions). One fails loudly. The other fails quietly. The quiet one is more dangerous.
+**The working hypothesis these numbers suggest:** Claude and ChatGPT tie on drift score but fail differently — Claude loudly (more corrections, more retained instructions), ChatGPT quietly (fewer corrections, lower keyword-survival of instructions). Caveat stated plainly: these are stage-1 keyword measurements. "Instruction survival" here means the instruction's vocabulary kept appearing in responses — a proxy, not verified behavioral compliance — and correction counts partly reflect each model's acknowledgment style. A re-run of the corpus through the stage-2 LLM verifier is the roadmap item that turns this from hypothesis into finding.
 
 ## Detection Architecture
 
@@ -70,10 +70,12 @@ Classifies the human's corrective actions — no existing tool does this:
 
 ### 20+ Detection Methods
 
+**Two-stage detection.** Stage 1 (local, always on): keyword/structural heuristics generate candidate findings — fast and deliberately over-sensitive. Stage 2 (automatic when an Anthropic API key is present): every candidate is reviewed by an LLM judge (Claude Sonnet 4.6) in a fresh, air-gapped context that rules CONFIRMED or FALSE_ALARM on the *behavior*, not the vocabulary. Refuted candidates are removed before scoring, and correction-persistence verdicts are semantically re-checked. The dashboard labels which mode produced the results.
+
 **Core Layers:**
 - Layer 1: Commission Detection (sycophancy, reality distortion, context gates)
-- Layer 2: Omission Detection (keyword-presence heuristics locally; LLM-as-judge semantic detection with `--api`)
-- Layer 3: Correction Persistence (did acknowledged fixes hold?)
+- Layer 2: Omission Detection (keyword-presence candidates; LLM-verified when a key is present)
+- Layer 3: Correction Persistence (did acknowledged fixes hold? — LLM re-checked in stage 2)
 - Layer 4: Structural Drift Barometer (RED/YELLOW/GREEN epistemic posture)
 
 **Advanced Detection:**
@@ -136,16 +138,20 @@ git clone https://github.com/gugosf114/drift-auditor.git
 cd drift-auditor
 pip install -r requirements.txt
 
-# For API-powered detection and adversarial testing:
-pip install anthropic
-export ANTHROPIC_API_KEY=your-key-here
+# For stage-2 LLM verification and adversarial testing, provide a key via any of:
+export ANTHROPIC_API_KEY=your-key-here      # env var
+# ...or a Streamlit secret named ANTHROPIC_API_KEY (Streamlit Cloud)
+# ...or Google Secret Manager: secret `anthropic-api-key` (GCP runtimes / gcloud CLI)
 ```
 
 ## Usage
 
 ```bash
-# Basic audit (local heuristics)
+# Audit (keyword candidates + LLM verification when a key resolves)
 python src/drift_auditor.py conversation.txt
+
+# Keyword-only audit (no API calls)
+python src/drift_auditor.py conversation.txt --no-verify
 
 # With system prompt and user preferences
 python src/drift_auditor.py chat.txt --system-prompt system.txt --preferences prefs.txt
@@ -218,6 +224,7 @@ Source research: "12 Rules for AI: An Operator's Field Manual" (29 pages, 17 aca
 
 ## Known Limitations
 
+- The 512-conversation cross-model table was produced with stage-1 keyword detection only (stage 2 shipped later); treat comparative claims as directional until the verified re-run.
 - Layer 2 local mode is keyword-presence matching (does the instruction's vocabulary keep appearing in responses?), not semantic compliance checking. It can flag compliant responses that don't echo the instruction, and miss violations that do. Use `--api` for Anthropic API-powered semantic detection.
 - Layer 4 barometer patterns are heuristic surface markers, not actual model uncertainty.
 - Scoring weights are heuristic, not empirically calibrated.

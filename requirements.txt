@@ -7,6 +7,8 @@ vaderSentiment>=3.3.2
 # PDF audit report export
 fpdf2>=2.7.0
 
-# Optional: API-powered semantic omission detection (Layer 2)
-# Uncomment to enable detect_omission_api() with Anthropic's API
-# anthropic>=0.40.0
+# Stage-2 LLM verification (judge) + API-powered omission detection
+anthropic>=0.40.0
+
+# Optional: pull ANTHROPIC_API_KEY from Google Secret Manager on GCP runtimes
+google-cloud-secret-manager>=2.20.0
